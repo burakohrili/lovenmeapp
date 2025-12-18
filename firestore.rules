@@ -1,0 +1,354 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+  // Daily mayors (GÜNLÜK MUHTARLAR) - Enhanced for atomic transactions
+match /daily_mayors/{mayorId} {
+  allow read: if request.auth != null;
+  allow create: if request.auth != null;
+  allow update: if request.auth != null;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+
+// Mayor transaction logs (MUHTAR İŞLEM LOGLARI) - YENİ EKLENEN
+match /mayor_transaction_logs/{logId} {
+  allow read: if request.auth != null;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if false;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+// Blocked Users - YENİ KURAL
+match /blocked_users/{blockId} {
+  allow read: if request.auth != null && 
+    (request.auth.uid == resource.data.blocker || 
+     request.auth.uid == resource.data.blocked);
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.blocker;
+  allow update: if false;
+  allow delete: if request.auth != null && 
+    request.auth.uid == resource.data.blocker;
+}
+ // Favorite venue history (FAVORİ MEKAN TARİHÇESİ) - YENİ EKLENEN
+    match /favorite_venue_history/{historyId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // Password reset codes (ŞİFRE SIFIRLAMA KODLARI) - YENİ EKLENEN
+match /password_reset_codes/{email} {
+  allow read, write: if true; // Public access for password reset
+}
+    
+// Email verification (EMAIL DOĞRULAMA) - YENİ EKLENEN
+match /email_verifications/{userId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow create: if request.auth != null && request.auth.uid == userId;
+  allow update: if request.auth != null && request.auth.uid == userId;
+  allow delete: if request.auth != null && request.auth.uid == userId;
+}
+
+// Password verification (ŞİFRE DOĞRULAMA) - YENİ EKLENEN
+match /password_verifications/{userId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow create: if request.auth != null && request.auth.uid == userId;
+  allow update: if request.auth != null && request.auth.uid == userId;
+  allow delete: if request.auth != null && request.auth.uid == userId;
+}
+// Critical errors - IAP 
+match /critical_errors/{errorId} {
+  allow read: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if false;
+  allow delete: if false;
+}
+
+// Emergency fixes  - IAP 
+match /emergency_fixes/{fixId} {
+  allow read: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if false;
+  allow delete: if false;
+}
+
+// Venue mayors (MEKAN MUHTARLARI) - GÜNCELLENMIŞ
+match /venue_mayors/{venueId} {
+  allow read: if true; // Herkes görebilir
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.currentMayorId;
+  allow update: if request.auth != null;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+
+// Mayor bids (MUHTAR TEKLİFLERİ) - YENİ
+match /mayor_bids/{bidId} {
+  allow read: if request.auth != null;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+
+// Diamond transactions (ELMAS İŞLEMLERİ) - GÜNCELLENMIŞ
+match /diamond_transactions/{transactionId} {
+  allow read: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if false;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+
+// Premium subscriptions (PREMİUM ABONELİKLER) - YENİ EKLENEN
+match /premium_subscriptions/{subscriptionId} {
+  allow read: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+
+// Purchases (SATIN ALMA İŞLEMLERİ) - SUPER LIKE İÇİN YENİ EKLENEN
+match /purchases/{purchaseId} {
+  allow read: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow delete: if false;
+  allow write: if request.auth != null; // Atomic transaction support
+}
+
+// Restored Purchases (GERİ YÜKLENEN SATIN ALMALAR) - APPLE GUIDELINE 3.1.1
+// ⚠️ CRITICAL: Duplicate prevention için gerekli
+match /restored_purchases/{restoreId} {
+  allow read: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+  allow update: if false; // Restore records are immutable
+  allow delete: if false; // Never delete restore history
+  allow list: if request.auth != null; // Query için gerekli (duplicate check)
+}
+
+   // Passes koleksiyonu
+  	match /passes/{document=**} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.fromUserId || 
+         request.auth.uid == resource.data.toUserId);
+      allow write: if request.auth != null;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.fromUserId; // ✅ UNDO için silme izni
+    }
+
+    // Feed posts (AKIŞ PAYLAŞIMLARI)
+    match /feed_posts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null;  // Herkes beğenebilir
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Kullanıcılar - GÜNCELLENMIŞ
+    match /users/{userId} {
+      allow read: if true; // Email ile arama için public read
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == userId || 
+         // Elmas güncellemeleri için admin izni
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diamonds', 'diamondCount', 'updatedAt'])));
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null; // Atomic transaction support
+    }
+    
+    // Email doğrulama
+    match /email_verifications/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Telefon doğrulama  
+    match /phone_verifications/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Check-ins (TEK COLLECTION) - UPDATED FOR PERMISSION FIX
+    match /check_ins/{checkInId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // Check-in history (DISCOVER İÇİN TARİHÇE) - YENİ EKLENEN
+    match /check_in_history/{historyId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // Venues (MEKANLAR İÇİN YENİ)
+    match /venues/{venueId} {
+      allow read: if true; // Herkes okuyabilir
+      allow create: if request.auth != null;
+      allow update: if true; // Admin panel için sponsor güncellemeleri
+      allow delete: if false;
+    }
+    
+    // Sponsored chains (SPONSOR ZİNCİRLER) - YENİ EKLENEN
+    match /sponsored_chains/{chainId} {
+      allow read: if true; // Herkes okuyabilir
+      allow create: if true; // Admin panel için
+      allow update: if true; // Admin panel için
+      allow delete: if true; // Admin panel için
+    }
+    
+    // Matches 
+    match /matches/{matchId} {
+      allow read: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.user1Id || 
+        request.auth.uid == resource.data.user2Id
+      );
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.user1Id || 
+        request.auth.uid == resource.data.user2Id
+      ); // ✅ UNDO için match silme izni
+    }
+    
+    // Messages 
+    match /messages/{messageId} {
+      allow read: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.senderId;
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.receiverId && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.senderId || 
+        request.auth.uid == resource.data.receiverId
+      ); // ✅ UNDO için message silme izni
+    }
+    
+    // Likes
+    match /likes/{likeId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.fromUserId;
+      allow update: if false;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.fromUserId;
+    }
+    
+    
+    
+    // Super Likes 
+    match /super_likes/{likeId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.fromUserId;
+      allow update: if false;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.fromUserId; // ✅ UNDO için silme izni
+    }
+    
+    // User stats
+    match /user_stats/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Reports - GÜNCELLENMİŞ 
+    match /reports/{reportId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.reporter || 
+         request.auth.uid == resource.data.reported);
+      allow create: if request.auth != null;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Blocks 
+    match /blocks/{blockId} {
+      allow read: if request.auth != null && 
+        request.auth.uid == resource.data.blockedBy;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.blockedBy;
+      allow update: if false;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.blockedBy;
+    }
+    
+    // Notification Requests (FCM notification requests for Cloud Functions)
+    match /notification_requests/{requestId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if false; // Only Cloud Functions can update
+      allow delete: if false; // Only Cloud Functions can delete
+    }
+    
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow list: if request.auth != null; // ✅ UNDO için query izni
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == resource.data.fromUserId
+      ); // ✅ UNDO için notification'ı gönderen de silebilir
+    }
+    
+    // Chat Requests (YENİ SİSTEM - CHAT/SUPER CHAT)
+    match /chat_requests/{requestId} {
+      // Create: Sadece fromUserId kendi request'ini oluşturabilir
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.fromUserId
+        && request.resource.data.toUserId != request.auth.uid; // Self-request yasak
+      
+      // Read: Sadece taraflar okuyabilir
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.fromUserId 
+            || request.auth.uid == resource.data.toUserId);
+      
+      // List: Query için gerekli (pending requests, duplicate check)
+      allow list: if request.auth != null;
+      
+      // Update: Sadece toUserId status güncelleyebilir (accept/reject)
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.toUserId
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'respondedAt']);
+      
+      // Delete: Sadece gönderen silebilir (pending durumunda)
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.fromUserId
+        && resource.data.status == 'pending';
+    }
+  }
+}
