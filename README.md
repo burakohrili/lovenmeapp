@@ -1,4 +1,4 @@
-# 💕 LoveNMe - Modern Dating App
+# 💕 LoveNMe - Modern Community App
 
 **LoveNMe** mekân temelli eşleşme mantığına dayalı, yenilikçi bir sosyal tanışma uygulamasıdır. Kullanıcılar favori mekanlarını paylaşarak ortak ilgi alanlarına sahip kişilerle eşleşir ve gerçek dünyada tanışır.
 
@@ -52,7 +52,6 @@
 
 - ✅ **Android** (API 21+)
 - ✅ **iOS** (iOS 12.0+)
-- 🔄 **Web** (Geliştirme aşamasında)
 
 ## 🔧 Kurulum ve Çalıştırma
 
@@ -67,7 +66,7 @@ Android Studio / VS Code
 ```bash
 # Projeyi klonla
 git clone [repo-url]
-cd mydateapp
+cd lovenmeapp
 
 # Bağımlılıkları yükle
 flutter pub get
@@ -141,10 +140,4 @@ lib/
 - **Versiyon**: 1.0.0+15
 - **Package**: com.lovenme.app
 
-## 📄 Lisans
 
-Bu proje özel bir lisans altında geliştirilmiştir. Detaylar için iletişime geçiniz.
-
----
-
-💫 **LoveNMe ile gerçek aşk bir dokunuş uzağında!**
