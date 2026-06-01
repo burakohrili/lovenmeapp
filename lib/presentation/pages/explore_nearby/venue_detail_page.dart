@@ -33,6 +33,32 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
     super.initState();
     _checkPremiumStatus();
     _loadVenueDetail();
+    _setupPeriodicRefresh();
+  }
+
+  /// 🔄 REAL-TIME: Her 30 saniyede bir otomatik yenile
+  void _setupPeriodicRefresh() {
+    Future.delayed(const Duration(seconds: 30), () {
+      if (mounted) {
+        _refreshInBackground();
+        _setupPeriodicRefresh(); // Recursive
+      }
+    });
+  }
+
+  /// 🔄 BACKGROUND: Sessizce venue detayını yenile
+  Future<void> _refreshInBackground() async {
+    try {
+      final venueDetail = await _exploreService.getVenueDetail(widget.venueId);
+
+      if (mounted) {
+        setState(() {
+          _venueDetail = venueDetail;
+        });
+      }
+    } catch (e) {
+      // Hata durumunda sessizce devam et
+    }
   }
 
   Future<void> _checkPremiumStatus() async {
@@ -58,21 +84,33 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
     }
   }
 
-  Future<void> _loadVenueDetail() async {
-    setState(() => _isLoading = true);
-    
+  /// 📥 INITIAL LOAD: İlk yüklemede loading göster
+  Future<void> _loadVenueDetail({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
+
     try {
       final venueDetail = await _exploreService.getVenueDetail(widget.venueId);
-      
+
       setState(() {
         _venueDetail = venueDetail;
-        _isLoading = false;
+        if (showLoading) {
+          _isLoading = false;
+        }
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (showLoading) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  /// 🔄 PULL TO REFRESH: Kullanıcı manuel yenileme yaptığında
+  Future<void> _handleRefresh() async {
+    await _loadVenueDetail(showLoading: false);
   }
 
   @override
@@ -105,21 +143,25 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: CustomScrollView(
-        slivers: [
-          _buildHeader(),
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildVenueInfo(),
-                _buildCheckedInUsers(),
-                _buildFeaturesSection(),
-                const SizedBox(height: 24),
-              ],
+      body: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        color: AppColors.primary,
+        child: CustomScrollView(
+          slivers: [
+            _buildHeader(),
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildVenueInfo(),
+                  _buildCheckedInUsers(),
+                  _buildFeaturesSection(),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -146,8 +188,9 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
           children: [
             Builder(
               builder: (context) {
-                final photoUrl = _venueDetail!.photoUrl ?? 'https://via.placeholder.com/400x200';
-                
+                final photoUrl = _venueDetail!.photoUrl ??
+                    'https://via.placeholder.com/400x200';
+
                 return Image.network(
                   photoUrl,
                   fit: BoxFit.cover,
@@ -158,7 +201,8 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
                     return Center(
                       child: CircularProgressIndicator(
                         value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
                             : null,
                       ),
                     );
@@ -216,7 +260,8 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
               _buildCategoryIcon(),
             ],
           ),
-          if (_venueDetail!.description != null && _venueDetail!.description!.isNotEmpty) ...[
+          if (_venueDetail!.description != null &&
+              _venueDetail!.description!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               _venueDetail!.description!,
@@ -276,9 +321,7 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
     }
 
     // Görüntülenecek kullanıcılar (non-premium için muhtar + 2 kullanıcı = 3 kişi, premium için tümü)
-    final displayUsers = _isPremium
-        ? otherUsers
-        : otherUsers.take(2).toList();
+    final displayUsers = _isPremium ? otherUsers : otherUsers.take(2).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -299,7 +342,8 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -321,12 +365,20 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
           // Elmas Muhtar (varsa) - SADECE elmas muhtar gösterilecek
           if (mayor != null && mayor.isDiamondMayor) _buildMayorCard(mayor),
 
+          // Günlük (ücretsiz) Muhtar - Normal liste item olarak göster
+          if (mayor != null && !mayor.isDiamondMayor)
+            _buildUserListItem(mayor, isBlurred: false),
+
           // Diğer kullanıcılar - Liste şeklinde (ücretsiz muhtar dahil)
-          ...displayUsers.map((user) => _buildUserListItem(user, isBlurred: false)),
+          ...displayUsers
+              .map((user) => _buildUserListItem(user, isBlurred: false)),
 
           // Premium olmayan kullanıcılar için blurlu kartlar
           if (!_isPremium && otherUsers.length > 2)
-            ...otherUsers.skip(2).take(3).map((user) => _buildUserListItem(user, isBlurred: true)),
+            ...otherUsers
+                .skip(2)
+                .take(3)
+                .map((user) => _buildUserListItem(user, isBlurred: true)),
 
           // Premium upgrade prompt - sadece non-premium ve daha fazla kullanıcı varsa göster
           if (!_isPremium && otherUsers.length > 2)
@@ -339,7 +391,7 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
   Widget _buildMayorCard(VenueUser mayor) {
     // Elmas muhtar mı yoksa günün muhtarı mı?
     final isDiamond = mayor.isDiamondMayor;
-    
+
     return GestureDetector(
       onTap: () => _showUserProfile(mayor.userId),
       child: Container(
@@ -361,9 +413,8 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
           ),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDiamond
-                ? const Color(0xFFFF69B4)
-                : const Color(0xFFFFD700),
+            color:
+                isDiamond ? const Color(0xFFFF69B4) : const Color(0xFFFFD700),
             width: 2,
           ),
           boxShadow: [
@@ -513,7 +564,9 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
 
   Widget _buildUserListItem(VenueUser user, {bool isBlurred = false}) {
     return GestureDetector(
-      onTap: isBlurred ? _showPremiumUpgradeDialog : () => _showUserProfile(user.userId),
+      onTap: isBlurred
+          ? _showPremiumUpgradeDialog
+          : () => _showUserProfile(user.userId),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
         padding: const EdgeInsets.all(12),
@@ -530,109 +583,109 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
             // Ana içerik
             Row(
               children: [
-            // Avatar
-            Stack(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.primary.withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: ClipOval(
-                    child: user.photoUrl != null
-                        ? Image.network(
-                            user.photoUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return _buildDefaultAvatar(user.name);
-                            },
-                          )
-                        : _buildDefaultAvatar(user.name),
-                  ),
-                ),
-                if (user.isPremium)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
+                // Avatar
+                Stack(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.amber,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white,
-                          width: 1.5,
+                          color: AppColors.primary.withOpacity(0.3),
+                          width: 2,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.star,
-                        size: 12,
-                        color: Colors.white,
+                      child: ClipOval(
+                        child: user.photoUrl != null
+                            ? Image.network(
+                                user.photoUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return _buildDefaultAvatar(user.name);
+                                },
+                              )
+                            : _buildDefaultAvatar(user.name),
                       ),
                     ),
+                    if (user.isPremium)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.star,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                // İsim ve bilgi
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            user.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${user.age}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 14,
+                            color: Colors.grey[500],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${user.checkInCount} check-in',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey[400],
+                  size: 20,
+                ),
               ],
             ),
-            const SizedBox(width: 12),
-            // İsim ve bilgi
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        user.name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${user.age}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 14,
-                        color: Colors.grey[500],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${user.checkInCount} check-in',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: Colors.grey[400],
-              size: 20,
-            ),
-          ],
-            ),
-            
+
             // Blur overlay (sadece isBlurred true ise)
             if (isBlurred)
               Positioned.fill(
@@ -879,11 +932,10 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
       (u) => u.userId == userId,
       orElse: () => _venueDetail!.checkedInUsers.first,
     );
-    
+
     final isMayor = user?.isMayor ?? false;
     final isDiamondMayor = user?.isDiamondMayor ?? false;
-    
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

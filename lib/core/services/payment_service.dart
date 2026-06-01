@@ -102,7 +102,7 @@ class PaymentService {
       id: 'super_chats_3',
       title: '3 Super Chat',
       description: '3 super chat hakkı',
-      price: 74.99,
+      price: 89.99,
       currency: 'TRY',
       type: PurchaseType.superChats,
       benefits: {'superChats': 3},
@@ -111,7 +111,7 @@ class PaymentService {
       id: 'super_chats_10',
       title: '10 Super Chat',
       description: '10 super chat hakkı',
-      price: 219.99,
+      price: 264.99,
       currency: 'TRY',
       type: PurchaseType.superChats,
       benefits: {'superChats': 10},
@@ -120,7 +120,7 @@ class PaymentService {
       id: 'super_chats_25',
       title: '25 Super Chat',
       description: '25 super chat hakkı',
-      price: 499.99,
+      price: 599.99,
       currency: 'TRY',
       type: PurchaseType.superChats,
       benefits: {'superChats': 25},
@@ -205,12 +205,15 @@ class PaymentService {
     await _firestore.collection('purchases').add({
       'userId': userId,
       'itemId': item.id,
+      'productId': item.id,
       'title': item.title,
       'price': item.price,
       'currency': item.currency,
       'type': item.type.toString(),
       'benefits': item.benefits,
       'purchaseDate': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'timestamp': FieldValue.serverTimestamp(),
       'status': 'completed',
     });
   }
@@ -244,7 +247,7 @@ class PaymentService {
 
     await userRef.update({
       'isPremium': true,
-      'premiumExpiryDate': Timestamp.fromDate(expiryDate),
+      'premiumUntil': Timestamp.fromDate(expiryDate), // ✅ Doğru field adı (premiumExpiryDate değil)
       'dailyRewindsRemaining': 3,
       'dailyChatRequestsRemaining': 999,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -290,7 +293,7 @@ class PaymentService {
       if (!isPremium) return false;
 
       // Premium süresini kontrol et
-      final expiryDate = data['premiumExpiryDate'] as Timestamp?;
+      final expiryDate = data['premiumUntil'] as Timestamp?; // ✅ Doğru field adı
       if (expiryDate != null && expiryDate.toDate().isBefore(DateTime.now())) {
         await _firestore.collection('users').doc(userId).update({
           'isPremium': false,

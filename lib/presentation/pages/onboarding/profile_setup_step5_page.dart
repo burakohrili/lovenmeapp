@@ -56,6 +56,48 @@ class _ProfileSetupStep5PageState extends ConsumerState<ProfileSetupStep5Page>
     final profile = ref.read(userProfileProvider);
     _emailController = TextEditingController(text: profile.email ?? '');
     canEditEmail = profile.email == null || profile.email!.isEmpty;
+    
+    // 🔥 YENİ: Daha önce gönderilmiş kod var mı kontrol et
+    _checkExistingVerification();
+  }
+  
+  // 🔥 YENİ: Mevcut doğrulama kodunu kontrol et
+  Future<void> _checkExistingVerification() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      final verificationDoc = await FirebaseFirestore.instance
+          .collection('email_verifications')
+          .doc(user.uid)
+          .get();
+      
+      if (verificationDoc.exists) {
+        final data = verificationDoc.data()!;
+        final expiresAtStr = data['expiresAt'] as String?;
+        
+        if (expiresAtStr != null) {
+          final expiresAt = DateTime.parse(expiresAtStr);
+          
+          // Kod hala geçerli mi (10 dakika içinde)
+          if (DateTime.now().isBefore(expiresAt)) {
+            setState(() {
+              isCodeSent = true;
+              generatedCode = data['code'] ?? '';
+              // Kalan süreyi hesapla
+              final remainingSeconds = expiresAt.difference(DateTime.now()).inSeconds;
+              resendTimer = (remainingSeconds % 60).clamp(0, 60);
+            });
+            
+            _startResendTimer();
+            
+            _showSuccess('Daha önce gönderilen doğrulama kodu hala geçerli');
+          }
+        }
+      }
+    } catch (e) {
+      // Hata olsa bile devam et
+    }
   }
   
   @override
@@ -134,17 +176,40 @@ class _ProfileSetupStep5PageState extends ConsumerState<ProfileSetupStep5Page>
     try {
       final trimmedEmail = _emailController.text.trim().toLowerCase();
       
-      // Email benzersizlik kontrolü
+      // 🔥 YENİ: Email benzersizlik kontrolü (kendi email'i hariç)
       final existingUsers = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: trimmedEmail)
-          .limit(1)
+          .limit(2) // 2 limit (kendisi + başkası varsa)
           .get();
       
-      if (existingUsers.docs.isNotEmpty && 
-          existingUsers.docs.first.id != user.uid) {
-        _showError('Bu email adresi zaten kullanımda');
+      // Eğer email kullanımda ama kullanıcının KENDİ email'i değilse hata ver
+      bool isEmailUsedByOther = false;
+      for (var doc in existingUsers.docs) {
+        if (doc.id != user.uid) {
+          isEmailUsedByOther = true;
+          break;
+        }
+      }
+      
+      if (isEmailUsedByOther) {
+        _showError('Bu email adresi başka bir kullanıcı tarafından kullanılıyor');
         return;
+      }
+      
+      // 🔥 YENİ: Eğer kullanıcının email'i Firebase Auth'ta farklıysa güncelle
+      if (user.email != trimmedEmail) {
+        try {
+          await user.updateEmail(trimmedEmail);
+          await user.reload(); // Kullanıcıyı yeniden yükle
+        } catch (emailUpdateError) {
+          // Email güncelleme hatası - hassas işlem, yeniden auth gerekebilir
+          if (emailUpdateError.toString().contains('requires-recent-login')) {
+            _showError('Email güncellemek için lütfen çıkış yapıp tekrar giriş yapın');
+            return;
+          }
+          // Diğer hatalar için devam et (doğrulama sonrası güncellenecek)
+        }
       }
       
       // Firestore'a kodu kaydet
@@ -161,7 +226,7 @@ class _ProfileSetupStep5PageState extends ConsumerState<ProfileSetupStep5Page>
           'maxAttempts': 5,
         }, SetOptions(merge: true));
       
-      // Production'da gerçek email gönder
+     
       await _sendEmailViaFirebase(trimmedEmail, generatedCode);
       
       setState(() {

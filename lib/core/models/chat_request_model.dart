@@ -23,7 +23,7 @@ class ChatRequest {
   final String toUserId;
   final ChatRequestType type;
   final ChatRequestStatus status;
-  final String? message; // Super chat için mesaj (max 20 karakter)
+  final String? message; // Super chat için mesaj (max 20 karakter) - Bu mesaj kabul edildiğinde ilk mesaj olarak gönderilir
   final DateTime timestamp;
   final DateTime? respondedAt;
   final DateTime? expiresAt; // 30 gün sonrası

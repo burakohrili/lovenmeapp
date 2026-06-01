@@ -3,14 +3,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// Muhtar sistemi için Firebase servis sınıfı
 class MuhtarFirebaseService {
-  static final MuhtarFirebaseService _instance = MuhtarFirebaseService._internal();
+  static final MuhtarFirebaseService _instance =
+      MuhtarFirebaseService._internal();
   factory MuhtarFirebaseService() => _instance;
   MuhtarFirebaseService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Kullanıcının elmas bakiyesini getir  
+  /// Kullanıcının elmas bakiyesini getir
   Future<int> getUserDiamondBalance() async {
     try {
       final user = _auth.currentUser;
@@ -21,7 +22,10 @@ class MuhtarFirebaseService {
 
       final data = userDoc.data()!;
       // Hem diamonds hem de diamondBalance hem de diamondCount field'larını kontrol et
-      final balance = data['diamonds'] ?? data['diamondBalance'] ?? data['diamondCount'] ?? 0;
+      final balance = data['diamonds'] ??
+          data['diamondBalance'] ??
+          data['diamondCount'] ??
+          0;
       return balance;
     } catch (e) {
       return 0;
@@ -39,7 +43,7 @@ class MuhtarFirebaseService {
         'diamondCount': newBalance, // Backup field
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      
+
       return true;
     } catch (e) {
       return false;
@@ -55,7 +59,6 @@ class MuhtarFirebaseService {
       // Önce mevcut bakiyeyi al
       final currentBalance = await getUserDiamondBalance();
       final newBalance = currentBalance + diamondAmount;
-      
 
       // Firebase'de bakiyeyi güncelle
       await _firestore.collection('users').doc(user.uid).update({
@@ -94,7 +97,8 @@ class MuhtarFirebaseService {
       final batch = _firestore.batch();
 
       // Diamond transaction kaydı oluştur (yeni koleksiyon yapısına göre)
-      final transactionRef = _firestore.collection('diamond_transactions').doc();
+      final transactionRef =
+          _firestore.collection('diamond_transactions').doc();
       batch.set(transactionRef, {
         'userId': user.uid,
         'transactionType': 'purchase',
@@ -108,8 +112,9 @@ class MuhtarFirebaseService {
 
       // Kullanıcının mevcut bakiyesini al ve güncelle
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
-      final currentBalance = userDoc.exists ? (userDoc.data()!['diamonds'] ?? 0) : 0;
-      
+      final currentBalance =
+          userDoc.exists ? (userDoc.data()!['diamonds'] ?? 0) : 0;
+
       batch.update(_firestore.collection('users').doc(user.uid), {
         'diamonds': currentBalance + amount,
         'diamondCount': currentBalance + amount,
@@ -127,20 +132,16 @@ class MuhtarFirebaseService {
   /// Mekânın mevcut muhtar bilgisini getir
   Future<Map<String, dynamic>?> getVenueMayor(String venueId) async {
     try {
-      final mayorDoc = await _firestore
-          .collection('venue_mayors')
-          .doc(venueId)
-          .get();
+      final mayorDoc =
+          await _firestore.collection('venue_mayors').doc(venueId).get();
 
       if (!mayorDoc.exists) return null;
 
       final data = mayorDoc.data()!;
-      
+
       // Kullanıcı bilgisini de getir
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(data['userId'])
-          .get();
+      final userDoc =
+          await _firestore.collection('users').doc(data['userId']).get();
 
       if (!userDoc.exists) return null;
 
@@ -174,12 +175,10 @@ class MuhtarFirebaseService {
 
       for (var bidDoc in bidsQuery.docs) {
         final bidData = bidDoc.data();
-        
+
         // Kullanıcı bilgisini getir
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(bidData['userId'])
-            .get();
+        final userDoc =
+            await _firestore.collection('users').doc(bidData['userId']).get();
 
         if (userDoc.exists) {
           final userData = userDoc.data()!;
@@ -233,7 +232,9 @@ class MuhtarFirebaseService {
 
       // Kullanıcının elmas bakiyesini düş
       batch.update(_firestore.collection('users').doc(user.uid), {
-        'diamondBalance': currentBalance - bidAmount,
+        'diamonds': currentBalance - bidAmount,
+        'diamondCount': currentBalance - bidAmount, // Backup field
+        'totalDiamondsSpent': FieldValue.increment(bidAmount),
         'lastDiamondUpdate': FieldValue.serverTimestamp(),
       });
 
@@ -256,11 +257,14 @@ class MuhtarFirebaseService {
               .collection('users')
               .doc(currentMayor['userId'])
               .get();
-          
+
           if (oldMayorDoc.exists) {
-            final oldBalance = oldMayorDoc.data()!['diamondBalance'] ?? 0;
-            batch.update(_firestore.collection('users').doc(currentMayor['userId']), {
-              'diamondBalance': oldBalance + currentMayor['bidAmount'],
+            final oldBalance = oldMayorDoc.data()!['diamonds'] ?? 0;
+            batch.update(
+                _firestore.collection('users').doc(currentMayor['userId']), {
+              'diamonds': oldBalance + currentMayor['bidAmount'],
+              'diamondCount':
+                  oldBalance + currentMayor['bidAmount'], // Backup field
             });
           }
         }
@@ -310,7 +314,9 @@ class MuhtarFirebaseService {
 
       // Kullanıcının elmas bakiyesini düş
       batch.update(_firestore.collection('users').doc(user.uid), {
-        'diamondBalance': currentBalance - buyNowAmount,
+        'diamonds': currentBalance - buyNowAmount,
+        'diamondCount': currentBalance - buyNowAmount, // Backup field
+        'totalDiamondsSpent': FieldValue.increment(buyNowAmount),
         'lastDiamondUpdate': FieldValue.serverTimestamp(),
       });
 
@@ -331,11 +337,14 @@ class MuhtarFirebaseService {
             .collection('users')
             .doc(currentMayor['userId'])
             .get();
-        
+
         if (oldMayorDoc.exists) {
-          final oldBalance = oldMayorDoc.data()!['diamondBalance'] ?? 0;
-          batch.update(_firestore.collection('users').doc(currentMayor['userId']), {
-            'diamondBalance': oldBalance + currentMayor['bidAmount'],
+          final oldBalance = oldMayorDoc.data()!['diamonds'] ?? 0;
+          batch.update(
+              _firestore.collection('users').doc(currentMayor['userId']), {
+            'diamonds': oldBalance + currentMayor['bidAmount'],
+            'diamondCount':
+                oldBalance + currentMayor['bidAmount'], // Backup field
           });
         }
       }
@@ -385,12 +394,10 @@ class MuhtarFirebaseService {
       if (!snapshot.exists) return null;
 
       final data = snapshot.data()!;
-      
+
       // Kullanıcı bilgisini getir
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(data['userId'])
-          .get();
+      final userDoc =
+          await _firestore.collection('users').doc(data['userId']).get();
 
       if (!userDoc.exists) return null;
 
@@ -421,7 +428,10 @@ class MuhtarFirebaseService {
       if (!snapshot.exists) return 0;
       final data = snapshot.data()!;
       // Hem diamonds hem de diamondBalance hem de diamondCount field'larını kontrol et
-      final balance = data['diamonds'] ?? data['diamondBalance'] ?? data['diamondCount'] ?? 0;
+      final balance = data['diamonds'] ??
+          data['diamondBalance'] ??
+          data['diamondCount'] ??
+          0;
       return balance;
     });
   }
@@ -447,7 +457,7 @@ class MuhtarFirebaseService {
 
       // Venue ID'ye göre grupla ve duplicate'leri bul
       final Map<String, List<QueryDocumentSnapshot>> venueGroups = {};
-      
+
       for (final doc in mayorQuery.docs) {
         final venueId = doc.data()['venueId'] as String?;
         if (venueId != null) {
@@ -459,45 +469,41 @@ class MuhtarFirebaseService {
       for (final entry in venueGroups.entries) {
         final venueId = entry.key;
         final docs = entry.value;
-        
+
         if (docs.length > 1) {
-          
           // En son kaydı bul (en yüksek diamond'a sahip olan veya en son oluşturulan)
           docs.sort((a, b) {
             final aData = a.data() as Map<String, dynamic>;
             final bData = b.data() as Map<String, dynamic>;
-            
+
             final aDiamonds = aData['diamondsSpent'] ?? 0;
             final bDiamonds = bData['diamondsSpent'] ?? 0;
-            
+
             // Önce diamond sayısına göre sırala
             if (aDiamonds != bDiamonds) {
               return bDiamonds.compareTo(aDiamonds);
             }
-            
+
             // Diamond sayısı aynıysa timestamp'e göre sırala
             final aTime = aData['assignedAt'] ?? aData['createdAt'];
             final bTime = bData['assignedAt'] ?? bData['createdAt'];
-            
+
             if (aTime != null && bTime != null) {
               return (bTime as Timestamp).compareTo(aTime as Timestamp);
             }
-            
+
             return 0;
           });
-          
+
           // İlk kaydı sakla, geri kalanını sil
           final keepDoc = docs.first;
           final deleteCount = docs.length - 1;
-          
+
           for (int i = 1; i < docs.length; i++) {
             await docs[i].reference.delete();
           }
-          
         }
       }
-      
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 }

@@ -46,11 +46,11 @@ extension PremiumSubscriptionTypeExtension on PremiumSubscriptionType {
   double get price {
     switch (this) {
       case PremiumSubscriptionType.weekly:
-        return 99.99;
+        return 95.99;
       case PremiumSubscriptionType.monthly:
-        return 299.99;
+        return 359.99;
       case PremiumSubscriptionType.quarterly:
-        return 499.99;
+        return 719.99;
     }
   }
 
@@ -72,7 +72,7 @@ extension PremiumSubscriptionTypeExtension on PremiumSubscriptionType {
       case PremiumSubscriptionType.monthly:
         return 'En popüler seçenek';
       case PremiumSubscriptionType.quarterly:
-        return '%44 tasarruf! Lansman özel fiyatı';
+        return '%33 tasarruf! En avantajlı paket';
     }
   }
 
@@ -158,6 +158,9 @@ class PremiumPackage {
   final String title;
   final String subtitle;
   final double price;
+  /// Store'dan gelen formatlanmış fiyat stringi (ör. "₺359,99").
+  /// null ise widget kendi formatlar.
+  final String? priceString;
   final double? originalPrice;
   final String duration;
   final List<String> features;
@@ -169,6 +172,7 @@ class PremiumPackage {
     required this.title,
     required this.subtitle,
     required this.price,
+    this.priceString,
     this.originalPrice,
     required this.duration,
     required this.features,
@@ -182,7 +186,7 @@ class PremiumPackage {
       title: type.displayName,
       subtitle: type.description,
       price: type.price,
-      originalPrice: type == PremiumSubscriptionType.quarterly ? 899.99 : null,
+      originalPrice: type == PremiumSubscriptionType.quarterly ? 1079.97 : null,
       duration: type.duration,
       features: type.features,
       isRecommended: type == PremiumSubscriptionType.monthly,

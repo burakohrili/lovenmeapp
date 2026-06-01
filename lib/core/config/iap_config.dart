@@ -28,8 +28,8 @@ class IAPConfig {
       'title': '10 Elmas',
       'description': 'Premium özellikler için',
       'quantity': 10,
-      'originalPrice': 74.99, // ✅ Fiyat güncellendi: 79.99 → 74.99
-      'pricePerUnit': 7.49,
+      'originalPrice': 99.99,
+      'pricePerUnit': 9.99,
       'isPopular': false,
     },
     {
@@ -37,8 +37,8 @@ class IAPConfig {
       'title': '50 Elmas',
       'description': 'Premium özellikler için',
       'quantity': 50,
-      'originalPrice': 249.99, // ✅ Fiyat güncellendi: 299.99 → 249.99
-      'pricePerUnit': 4.99,
+      'originalPrice': 299.99,
+      'pricePerUnit': 5.99,
       'isPopular': false,
     },
     {
@@ -57,8 +57,8 @@ class IAPConfig {
       'title': 'Standart',
       'description': '250 Elmas - En çok tercih edilen',
       'quantity': 250,
-      'originalPrice': 999.99,
-      'pricePerUnit': 3.99,
+      'originalPrice': 1199.99,
+      'pricePerUnit': 4.79,
       'isPopular': true,
     },
     {
@@ -66,8 +66,8 @@ class IAPConfig {
       'title': 'Efsane',
       'description': '500 Elmas - En avantajlı paket',
       'quantity': 500,
-      'originalPrice': 1499.99,
-      'pricePerUnit': 2.99,
+      'originalPrice': 1799.99,
+      'pricePerUnit': 3.59,
       'discountPercent': 40,
       'isPopular': false,
     },
@@ -110,7 +110,7 @@ class IAPConfig {
       'description': 'Sınırsız chat + özel özellikler',
       'duration': 7,
       'durationText': '7 Gün',
-      'originalPrice': 99.99,
+      'originalPrice': 95.99,
       'isPopular': false,
       'features': [
         'Sınırsız chat isteği',
@@ -126,7 +126,7 @@ class IAPConfig {
       'description': 'Sınırsız özellikler',
       'duration': 30,
       'durationText': '1 Ay',
-      'originalPrice': 299.99,
+      'originalPrice': 359.99,
       'isPopular': true,
       'features': [
         'Sınırsız chat isteği',
@@ -140,12 +140,12 @@ class IAPConfig {
     {
       'id': 'premium_quarterly',
       'title': 'Premium 3 Aylık',
-      'subtitle': '%44 tasarruf!',
-      'description': 'Lansman özel fiyatı',
+      'subtitle': '%33 tasarruf!',
+      'description': 'En avantajlı paket',
       'duration': 90,
       'durationText': '3 Ay',
-      'originalPrice': 499.99,
-      'discountPercent': 44,
+      'originalPrice': 719.99,
+      'discountPercent': 33,
       'isPopular': false,
       'features': [
         'Sınırsız chat isteği',
@@ -155,7 +155,7 @@ class IAPConfig {
         'Günde 3 geri alma hakkı',
         'Özel rozetler',
         'Öncelikli destek',
-        '%44 indirim',
+        '%33 indirim',
       ],
     },
   ];
@@ -167,8 +167,8 @@ class IAPConfig {
       'title': '3 Super Chat',
       'description': 'Özel mesaj ile fark yarat',
       'quantity': 3,
-      'originalPrice': 74.99,
-      'pricePerUnit': 24.99,
+      'originalPrice': 89.99,
+      'pricePerUnit': 29.99,
       'isPopular': false,
       'features': [
         '20 karakterlik özel mesaj',
@@ -181,8 +181,8 @@ class IAPConfig {
       'title': '10 Super Chat',
       'description': 'Daha fazla eşleşme için ideal',
       'quantity': 10,
-      'originalPrice': 219.99,
-      'pricePerUnit': 21.99,
+      'originalPrice': 264.99,
+      'pricePerUnit': 26.49,
       'isPopular': true,
       'features': [
         '20 karakterlik özel mesaj',
@@ -196,8 +196,8 @@ class IAPConfig {
       'title': '25 Super Chat',
       'description': 'Maximum etki için',
       'quantity': 25,
-      'originalPrice': 499.99,
-      'pricePerUnit': 19.99,
+      'originalPrice': 599.99,
+      'pricePerUnit': 23.99,
       'discountPercent': 20,
       'isPopular': false,
       'features': [
@@ -280,12 +280,17 @@ class IAPConfig {
 
   /// Get all consumable product IDs
   static Set<String> get consumableProductIds => {
-    productIds['super_likes_3']!,
-    productIds['super_likes_10']!,
-    productIds['super_likes_25']!,
+    // Diamonds ✅
     productIds['diamonds_10']!,
     productIds['diamonds_50']!,
     productIds['diamonds_100']!,
+    productIds['diamonds_250']!,
+    productIds['diamonds_500']!,
+    // Super Chats ✅
+    productIds['super_chats_3']!,
+    productIds['super_chats_10']!,
+    productIds['super_chats_25']!,
+    // super_likes_* KALDIRILDI — kaldırılanları buraya ekleme, null crash olur
   };
 
   /// Get all product IDs

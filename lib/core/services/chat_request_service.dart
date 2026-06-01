@@ -104,7 +104,7 @@ class ChatRequestService {
       };
 
       // Firestore'a ekle
-      final docRef = await _firestore.collection('chat_requests').add(requestData);
+      await _firestore.collection('chat_requests').add(requestData);
       
       // Limit düşür
       if (isSuperChat) {
@@ -367,6 +367,7 @@ class ChatRequestService {
     try {
       final fromUserId = requestData['fromUserId'] as String;
       final toUserId = requestData['toUserId'] as String;
+      final initialMessage = requestData['message'] as String?;
 
       // Zaten match olmuş mu kontrol et
       final alreadyMatched = await areAlreadyMatchedWith(fromUserId, toUserId);
@@ -375,7 +376,7 @@ class ChatRequestService {
       }
 
       // Match oluştur
-      await _firestore.collection('matches').add({
+      final matchRef = await _firestore.collection('matches').add({
         'user1Id': fromUserId,
         'user2Id': toUserId,
         'users': [fromUserId, toUserId],
@@ -383,7 +384,51 @@ class ChatRequestService {
         'isActive': true,
         'initiatedBy': fromUserId,
         'requestType': requestData['type'],
-        'initialMessage': requestData['message'],
+        'initialMessage': initialMessage,
+      });
+
+      // Super chat ile gelen mesajı ilk mesaj olarak gönder
+      if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+        await _sendInitialMessage(
+          matchId: matchRef.id,
+          fromUserId: fromUserId,
+          toUserId: toUserId,
+          message: initialMessage,
+        );
+      }
+
+    } catch (e) {
+    }
+  }
+
+  /// İlk mesajı gönder (Super chat'ten gelen mesaj için)
+  static Future<void> _sendInitialMessage({
+    required String matchId,
+    required String fromUserId,
+    required String toUserId,
+    required String message,
+  }) async {
+    try {
+      // Mesajı root level messages koleksiyonuna ekle (Firebase Chat Provider ile uyumlu)
+      await _firestore.collection('messages').add({
+        'matchId': matchId,
+        'senderId': fromUserId,
+        'receiverId': toUserId,
+        'message': message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'type': 0, // MessageType.text = 0
+        'imageUrl': null,
+        'voiceUrl': null,
+        'venueId': null,
+        'venueName': null,
+      });
+
+      // Match'in lastMessage bilgilerini güncelle
+      await _firestore.collection('matches').doc(matchId).update({
+        'lastMessage': message,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': fromUserId,
       });
 
     } catch (e) {

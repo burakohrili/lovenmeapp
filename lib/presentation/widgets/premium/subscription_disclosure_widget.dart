@@ -1,5 +1,6 @@
 // lib/presentation/widgets/premium/subscription_disclosure_widget.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
@@ -148,7 +149,9 @@ class SubscriptionDisclosureWidget extends StatelessWidget {
           // İptal yönergeleri
           _buildInfoRow(
             icon: Icons.settings,
-            text: 'Aboneliği App Store > Hesabım > Abonelikler\'den iptal edebilirsiniz',
+            text: Platform.isIOS
+                ? 'Aboneliği App Store > Hesabım > Abonelikler\'den iptal edebilirsiniz'
+                : 'Aboneliği Google Play > Ödemeler ve abonelikler > Abonelikler\'den iptal edebilirsiniz',
             context: context,
           ),
           
@@ -375,8 +378,11 @@ class SimpleSubscriptionDisclosure extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        'Otomatik yenilenir. İptal için App Store > Abonelikler. '
-        'Detaylar için Kullanım Koşulları ve Gizlilik Politikası\'na bakın.',
+        Platform.isIOS
+            ? 'Otomatik yenilenir. İptal için App Store > Abonelikler. '
+              'Detaylar için Kullanım Koşulları ve Gizlilik Politikası\'na bakın.'
+            : 'Otomatik yenilenir. İptal için Google Play > Abonelikler. '
+              'Detaylar için Kullanım Koşulları ve Gizlilik Politikası\'na bakın.',
         style: TextStyle(
           fontSize: 10,
           color: darkMode 

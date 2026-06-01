@@ -45,6 +45,7 @@ import 'services/venue_service.dart';
 import 'services/optimized_venue_service.dart';
 import 'services/checkin_service.dart';
 import '../../../core/models/checkedin_user.dart';
+import '../../../core/services/venue_cache_service.dart';
 
 // Models
 import '../../models/venue.dart';
@@ -68,6 +69,10 @@ class _MapPageState extends ConsumerState<MapPage>
   Position? _currentPosition;
   bool _isLocationPermissionGranted = false;
   bool _isLoading = false;
+
+  // 🔥 YENİ: Son bilinen konum tracking
+  LatLng? _lastKnownLocation;
+  static const double _significantMovementThreshold = 500.0; // 500m hareket
 
   // Dynamic loading variables
   double _currentZoom = 18.0;
@@ -123,6 +128,13 @@ class _MapPageState extends ConsumerState<MapPage>
   int _userDiamondBalance = 0;
   StreamSubscription<int>? _diamondBalanceSubscription;
 
+  // IAP fiyatları — Google Play / App Store'dan çekilen gerçek fiyatlar
+  Map<String, String> _iapPrices = {};
+  /// Store'da aktif olan ürün key'leri — aktif değilse kart gizlenir
+  Set<String> _iapAvailableKeys = {};
+  bool _iapProductsLoaded = false; // Yükleme tamamlandı mı?
+  final IAPService _iapService = IAPService();
+
   // 🕐 Check-in cooldown related
   CheckInCooldownStatus? _cooldownStatus;
   Timer? _cooldownTimer;
@@ -158,6 +170,7 @@ class _MapPageState extends ConsumerState<MapPage>
     WidgetsBinding.instance.addObserver(this); // Lifecycle observer ekle
     _loadInitialDiamondBalance(); // İlk bakiyeyi yükle
     _startDiamondBalanceListener(); // Sonra stream'i başlat
+    _loadIAPPrices(); // Google Play / App Store fiyatlarını yükle
     _loadCustomMarkerIcons(); // Custom marker icon'ları yükle
     _loadSponsoredChains(); // Chain sponsor data'sını yükle
     _loadCheckInCooldownStatus(); // 🕐 Check-in cooldown kontrolü
@@ -586,6 +599,25 @@ class _MapPageState extends ConsumerState<MapPage>
     } catch (e) {
       // Hata durumunda 0 olarak bırak, stream geldiğinde düzelecek
     }
+  }
+
+  /// Google Play / App Store'dan gerçek ürün fiyatlarını çek
+  Future<void> _loadIAPPrices() async {
+    for (int i = 0; i < 10; i++) {
+      if (_iapService.products.isNotEmpty) break;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    if (!mounted) return;
+    final prices = _iapService.getAllPriceStrings();
+    // Hangi ürünler store'da aktif?
+    final availableKeys = _iapService.getAvailablePackageKeys('diamonds_')
+      ..addAll(_iapService.getAvailablePackageKeys('super_chats_'))
+      ..addAll(_iapService.getAvailablePackageKeys('premium_'));
+    _safeSetState(() {
+      _iapPrices = prices;
+      _iapAvailableKeys = availableKeys;
+      _iapProductsLoaded = true;
+    });
   }
 
   /// Kullanıcının elmas bakiyesini yükle
@@ -1454,6 +1486,34 @@ class _MapPageState extends ConsumerState<MapPage>
         timeLimit: timeoutDuration,
       );
 
+      final newLocation = LatLng(position.latitude, position.longitude);
+      
+      // 🔥 YENİ: Kullanıcı önemli ölçüde hareket etti mi kontrol et
+      bool shouldClearCache = false;
+      if (_lastKnownLocation != null) {
+        final distance = _calculateDistance(_lastKnownLocation!, newLocation);
+        if (distance > _significantMovementThreshold) {
+          shouldClearCache = true;
+        }
+      }
+      
+      // 🔥 YENİ: Önemli hareket varsa cache'leri temizle
+      if (shouldClearCache) {
+        // Memory cache'leri temizle
+        _tileVenueCache.clear();
+        _loadedTiles.clear();
+        _loadedVenueIds.clear();
+        _loadedAreas.clear();
+        _venues.clear();
+        _markers.clear();
+        
+        // SharedPreferences cache'ini de temizle
+        await VenueCacheService.clearCache();
+      }
+      
+      // Son bilinen konumu güncelle
+      _lastKnownLocation = newLocation;
+
       _safeSetState(() {
         _currentPosition = position;
       });
@@ -1678,6 +1738,30 @@ class _MapPageState extends ConsumerState<MapPage>
   }
 
   Future<void> _onCameraIdle() async {
+    // 🔥 YENİ: Kamera durduktan sonra konum değişikliğini kontrol et
+    if (_currentPosition != null && _mapController != null) {
+      final visibleRegion = await _mapController!.getVisibleRegion();
+      final centerLat = (visibleRegion.southwest.latitude + visibleRegion.northeast.latitude) / 2;
+      final centerLng = (visibleRegion.southwest.longitude + visibleRegion.northeast.longitude) / 2;
+      final viewportCenter = LatLng(centerLat, centerLng);
+      
+      // Viewport merkezi ile son bilinen konum arasındaki mesafe
+      if (_lastKnownLocation != null) {
+        final distance = _calculateDistance(_lastKnownLocation!, viewportCenter);
+        
+        // Eğer kullanıcı 500m'den fazla hareket ettiyse cache'i temizle
+        if (distance > _significantMovementThreshold) {
+          _tileVenueCache.clear();
+          _loadedTiles.clear();
+          _loadedVenueIds.clear();
+          _loadedAreas.clear();
+          
+          // Son bilinen konumu güncelle
+          _lastKnownLocation = viewportCenter;
+        }
+      }
+    }
+    
     // Use optimized viewport-based loading instead of area-based
     await _loadVenuesInViewport();
   }
@@ -2532,8 +2616,8 @@ class _MapPageState extends ConsumerState<MapPage>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isDismissible: false, // Dialog'u manuel olarak kapatılamaz yap
-      enableDrag: false, // Drag ile kapatmayı engelle
+      isDismissible: true, // Dialog'u manuel olarak kapatılabilir yap
+      enableDrag: true, // Drag ile kapatmayı etkinleştir
       builder: (context) => _CheckInDialogWidget(
         venue: venue,
         onCheckInWithoutPhoto: () async {
@@ -2563,8 +2647,12 @@ class _MapPageState extends ConsumerState<MapPage>
 
   Future<void> _performCheckInWithoutPhoto(Venue venue) async {
     try {
+      final currentPos = _currentPosition != null
+          ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+          : null;
       final success = await _checkInService.performCheckInWithoutPhoto(
-          venue, _userCheckedInVenues);
+          venue, _userCheckedInVenues,
+          currentPosition: currentPos);
 
       if (success) {
         // 🚀 REAL-TIME GÜNCELLEME: Check-in sonrası tüm veriyi refresh et (FORCE REFRESH)
@@ -2656,8 +2744,12 @@ class _MapPageState extends ConsumerState<MapPage>
 
       try {
         // CheckInService ile fotoğraflı check-in yap
+        final currentPos = _currentPosition != null
+            ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+            : null;
         final success = await _checkInService.performCheckInWithPhoto(
-            venue, croppedImage, _userCheckedInVenues);
+            venue, croppedImage, _userCheckedInVenues,
+            currentPosition: currentPos);
 
         if (success) {
           // 🚀 REAL-TIME GÜNCELLEME: Fotoğraflı check-in sonrası tüm veriyi refresh et (FORCE REFRESH)
@@ -4090,15 +4182,30 @@ class _MapPageState extends ConsumerState<MapPage>
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
                     child: Row(
                       children: [
-                        // IAPConfig'den elmas paketlerini al
-                        ...IAPConfig.diamondPackages
-                            .asMap()
-                            .entries
-                            .map((entry) {
-                          final index = entry.key;
-                          final package = entry.value;
+                        // IAPConfig'den elmas paketlerini al; store'da aktif olmayanları filtrele
+                        ...(() {
+                          final allPackages = IAPConfig.diamondPackages;
+                          final visiblePackages = _iapProductsLoaded
+                              ? allPackages
+                                  .where((p) =>
+                                      _iapAvailableKeys.contains(p['id']))
+                                  .toList()
+                              : allPackages;
 
-                          // Icon ve renk ayarları
+                          if (visiblePackages.isEmpty) {
+                            return [
+                              const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 16),
+                                child: Text(
+                                  'Şu anda satın alınabilir elmas paketi bulunmuyor.',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 14),
+                                ),
+                              )
+                            ];
+                          }
+
                           final icons = ['⚡', '🏆', '💎', '🌟', '👑', '🔥'];
                           final colors = [
                             AppColors.primaryLight,
@@ -4109,27 +4216,31 @@ class _MapPageState extends ConsumerState<MapPage>
                             Colors.deepPurple,
                           ];
 
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              right:
-                                  index < IAPConfig.diamondPackages.length - 1
-                                      ? 14.0
-                                      : 20.0,
-                            ),
-                            child: _buildDiamondPackageCard(
-                              title:
-                                  '${icons[index % icons.length]} ${package['title']}',
-                              diamonds: package['quantity'],
-                              price: package['originalPrice'],
-                              description: package['description'],
-                              color: colors[index % colors.length],
-                              gradientIntensity: 0.1 + (index * 0.1),
-                              onTap: () =>
-                                  _handleDiamondPurchase(package['quantity']),
-                              isPopular: package['isPopular'] ?? false,
-                            ),
-                          );
-                        }),
+                          return visiblePackages.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final package = entry.value;
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < visiblePackages.length - 1
+                                    ? 14.0
+                                    : 20.0,
+                              ),
+                              child: _buildDiamondPackageCard(
+                                title:
+                                    '${icons[index % icons.length]} ${package['title']}',
+                                diamonds: package['quantity'],
+                                price: package['originalPrice'],
+                                priceString: _iapPrices[package['id']],
+                                description: package['description'],
+                                color: colors[index % colors.length],
+                                gradientIntensity: 0.1 + (index * 0.1),
+                                onTap: () =>
+                                    _handleDiamondPurchase(package['quantity'], sheetContext: context),
+                                isPopular: package['isPopular'] ?? false,
+                              ),
+                            );
+                          }).toList();
+                        })(),
                       ],
                     ),
                   ),
@@ -4147,6 +4258,7 @@ class _MapPageState extends ConsumerState<MapPage>
     required String title,
     required int diamonds,
     required double price,
+    String? priceString,
     required String description,
     required Color color,
     required VoidCallback onTap,
@@ -4231,7 +4343,7 @@ class _MapPageState extends ConsumerState<MapPage>
                             ),
                           ),
                           Text(
-                            '₺${price.toStringAsFixed(2)}',
+                            priceString ?? '₺${price.toStringAsFixed(2)}',
                             style: const TextStyle(
                               fontSize: 18, // Biraz büyütüldü
                               fontWeight: FontWeight.w600,
@@ -4365,7 +4477,7 @@ class _MapPageState extends ConsumerState<MapPage>
   }
 
   /// Asıl diamond purchase işlemini handle et (Artık kullanılmıyor - GooglePayButton direkt çalışıyor)
-  Future<void> _handleDiamondPurchase(int diamondAmount) async {
+  Future<void> _handleDiamondPurchase(int diamondAmount, {BuildContext? sheetContext}) async {
     // Direkt IAP ile satın alma (Google Pay yok)
     String? productId;
     switch (diamondAmount) {
@@ -4395,6 +4507,9 @@ class _MapPageState extends ConsumerState<MapPage>
     }
 
     try {
+      // Bottom sheet'in kapalı olup olmadığını takip et
+      bool bottomSheetClosed = false;
+
       final success = await IAPService().buyProduct(
         productId,
         onSuccess: () {
@@ -4403,8 +4518,15 @@ class _MapPageState extends ConsumerState<MapPage>
           // Bakiyeyi yenile
           _loadUserDiamondBalance();
 
-          // Bottom sheet'i kapat
-          Navigator.pop(context);
+          // Bottom sheet hâlâ açıksa kapat (sheetContext ile — map sayfasını kapatma!)
+          if (!bottomSheetClosed) {
+            bottomSheetClosed = true;
+            try {
+              if (sheetContext != null && Navigator.of(sheetContext).canPop()) {
+                Navigator.of(sheetContext).pop();
+              }
+            } catch (_) {}
+          }
 
           // Başarı mesajı
           ScaffoldMessenger.of(context).showSnackBar(
@@ -4425,6 +4547,25 @@ class _MapPageState extends ConsumerState<MapPage>
           if (!mounted) return;
 
           _onDiamondPurchaseError(error);
+        },
+        onPendingTimeout: () {
+          // Ödeme hâlâ beklemede — bottom sheet'i kapat (sheetContext ile!), map sayfası açık kalsın
+          if (!mounted) return;
+          if (!bottomSheetClosed) {
+            bottomSheetClosed = true;
+            try {
+              if (sheetContext != null && Navigator.of(sheetContext).canPop()) {
+                Navigator.of(sheetContext).pop();
+              }
+            } catch (_) {}
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏳ Ödeme onay bekliyor. Onaylandığında elmaslarınız otomatik eklenecek.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
         },
       );
     } catch (e) {
@@ -4580,7 +4721,7 @@ class _CheckInDialogWidgetState extends State<_CheckInDialogWidget> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 200,
+      height: 220,
       decoration: const BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.only(
@@ -4590,16 +4731,40 @@ class _CheckInDialogWidgetState extends State<_CheckInDialogWidget> {
       ),
       child: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 50,
-            height: 5,
-            decoration: BoxDecoration(
-              color: AppColors.grey300,
-              borderRadius: BorderRadius.circular(10),
-            ),
+          // Drag handle ve kapatma butonu
+          Stack(
+            children: [
+              // Drag handle (ortada)
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 50,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.grey300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              // Kapatma butonu (sağ üstte)
+              Positioned(
+                right: 8,
+                top: 4,
+                child: IconButton(
+                  onPressed: () {
+                    if (!_isProcessing) {
+                      Navigator.of(context).pop();
+                      widget.onDialogClosed();
+                    }
+                  },
+                  icon: const Icon(Icons.close, color: AppColors.grey600),
+                  tooltip: 'Kapat',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           Text(
             _isProcessing ? 'Check-in Yapılıyor...' : 'Check-in Türü Seçin',
             style: const TextStyle(

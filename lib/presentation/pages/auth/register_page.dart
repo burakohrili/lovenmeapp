@@ -23,7 +23,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _loadingManager = LoadingStateManager();
-  
+
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptTerms = false;
@@ -34,7 +34,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   void initState() {
     super.initState();
-    
+
     // Real-time validation listeners
     _emailController.addListener(_validateEmailRealTime);
     _passwordController.addListener(_validatePasswordRealTime);
@@ -58,7 +58,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   void _validatePasswordRealTime() {
     FormValidationHelper.debounceValidation(onValidate: () {
       setState(() {
-        _passwordValidation = FormValidationHelper.validatePassword(_passwordController.text);
+        _passwordValidation =
+            FormValidationHelper.validatePassword(_passwordController.text);
       });
     });
   }
@@ -84,20 +85,21 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   }
 
   String? _validateConfirmPassword(String? value) {
-    return FormValidationHelper.validateConfirmPassword(value, _passwordController.text);
+    return FormValidationHelper.validateConfirmPassword(
+        value, _passwordController.text);
   }
 
   // FIREBASE İLE KAYIT
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     // Şifre gücü kontrolü - En az "fair" seviyesi gerekli
-    if (_passwordValidation == null || 
-        _passwordValidation!.score < 3) {
+    if (_passwordValidation == null || _passwordValidation!.score < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _passwordValidation?.error ?? 'Şifre çok zayıf. Lütfen daha güçlü bir şifre seçin.',
+            _passwordValidation?.error ??
+                'Şifre çok zayıf. Lütfen daha güçlü bir şifre seçin.',
           ),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 4),
@@ -105,7 +107,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       );
       return;
     }
-    
+
     if (!_acceptTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -121,8 +123,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         LoadingOperations.register,
         () async {
           // Firebase Authentication ile kullanıcı oluştur
-          UserCredential userCredential = await FirebaseAuth.instance
-              .createUserWithEmailAndPassword(
+          UserCredential userCredential =
+              await FirebaseAuth.instance.createUserWithEmailAndPassword(
             email: _emailController.text.trim(),
             password: _passwordController.text.trim(),
           );
@@ -144,7 +146,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               'superLikesRemaining': 0,
               'dailyRewindsRemaining': 0,
               // Muhtar sistemi için elmas sayısı
-              'diamonds': 0, // 
+              'diamonds': 0, //
               'diamondCount': 0, // Backup field
               'totalDiamondsEarned': 0,
               'totalDiamondsSpent': 0,
@@ -157,7 +159,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             await userCredential.user!.sendEmailVerification();
 
             // Provider'a email'i kaydet
-            ref.read(userProfileProvider.notifier).updateEmail(_emailController.text.trim());
+            ref
+                .read(userProfileProvider.notifier)
+                .updateEmail(_emailController.text.trim());
 
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -181,15 +185,18 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         },
         onError: (error) {
           String errorMessage = '';
-          
+
           if (error.contains('weak-password')) {
             errorMessage = 'Şifre çok zayıf';
           } else if (error.contains('email-already-in-use')) {
-            errorMessage = 'Bu email zaten kullanımda';
+            // 🔥 YENİ: Email kullanımda hatası için daha açıklayıcı mesaj
+            errorMessage =
+                'Bu email adresi zaten kayıtlı. Lütfen giriş yapın veya şifrenizi sıfırlayın.';
           } else if (error.contains('invalid-email')) {
             errorMessage = 'Geçersiz email formatı';
           } else {
-            errorMessage = 'Kayıt hatası: ${error.replaceAll('Exception: ', '')}';
+            errorMessage =
+                'Kayıt hatası: ${error.replaceAll('Exception: ', '')}';
           }
 
           if (mounted) {
@@ -197,6 +204,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               SnackBar(
                 content: Text(errorMessage),
                 backgroundColor: AppColors.error,
+                duration: const Duration(seconds: 5), // 🔥 5 saniye göster
               ),
             );
           }
@@ -237,10 +245,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         alignment: Alignment.centerLeft,
                         child: IconButton(
                           onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.arrow_back, color: AppColors.white),
+                          icon: const Icon(Icons.arrow_back,
+                              color: AppColors.white),
                         ),
                       ),
-                      
+
                       // Logo
                       // const Icon(
                       //   Icons.favorite,
@@ -248,22 +257,22 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       //   color: AppColors.white,
                       // ),
                       // const SizedBox(height: 16),
-                      
+
                       // Title
                       Hero(
-                          tag: 'app_logo',
-                          child: Container(
+                        tag: 'app_logo',
+                        child: Container(
+                          height: 200,
+                          width: double.infinity,
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            'assets/images/logos/white_logo.png',
                             height: 200,
                             width: double.infinity,
-                            alignment: Alignment.center,
-                            child: Image.asset(
-                              'lib/images/logos/LOVENME_white.png',
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.contain,
-                            ),
+                            fit: BoxFit.contain,
                           ),
                         ),
+                      ),
                       // const SizedBox(height: 8),
                       // Text(
                       //   'Mekanında aşkını bul',
@@ -274,91 +283,100 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       //   textAlign: TextAlign.center,
                       // ),
                       const SizedBox(height: 32),
-                      
+
                       // Email Field
 
                       Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextFormField(
-                        controller: _emailController,
-                        validator: _validateEmail,
-                        keyboardType: TextInputType.emailAddress,
-                            style: const TextStyle(color: AppColors.grey800),
-                            
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              hintText: 'ornek@email.com',
-                              prefixIconConstraints: BoxConstraints(minWidth: 0, minHeight: 0),
-                              contentPadding: EdgeInsets.only(bottom:12.0),
-                              prefixIcon: Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 18.0, vertical: 8),
-                                child: Icon(Icons.email, color: AppColors.primary),
-                              ),
-                              border: InputBorder.none,
-                              floatingLabelStyle: TextStyle(
-                                  color: AppColors.grey600,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextFormField(
+                          controller: _emailController,
+                          validator: _validateEmail,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: AppColors.grey800),
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            hintText: 'ornek@email.com',
+                            prefixIconConstraints:
+                                BoxConstraints(minWidth: 0, minHeight: 0),
+                            contentPadding: EdgeInsets.only(bottom: 12.0),
+                            prefixIcon: Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 18.0, vertical: 8),
+                              child:
+                                  Icon(Icons.email, color: AppColors.primary),
+                            ),
+                            border: InputBorder.none,
+                            floatingLabelStyle: TextStyle(
+                              color: AppColors.grey600,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
+                      ),
                       const SizedBox(height: 16),
-                      
+
                       // Password Field
                       Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child:TextFormField(
-                        controller: _passwordController,
-                        validator: _validatePassword,
-                        obscureText: _obscurePassword,
-                        style: const TextStyle(color: AppColors.grey800),
-                            decoration: InputDecoration(
-                              labelText: 'Şifre',
-                              hintText: '******',
-                              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                              contentPadding: const EdgeInsets.only(bottom: 12.0),
-                              prefixIcon: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 18.0, vertical: 8),
-                                child: Icon(Icons.lock, color: AppColors.primary),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextFormField(
+                          controller: _passwordController,
+                          validator: _validatePassword,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(color: AppColors.grey800),
+                          decoration: InputDecoration(
+                            labelText: 'Şifre',
+                            hintText: '******',
+                            prefixIconConstraints:
+                                const BoxConstraints(minWidth: 0, minHeight: 0),
+                            contentPadding: const EdgeInsets.only(bottom: 12.0),
+                            prefixIcon: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 18.0, vertical: 8),
+                              child: Icon(Icons.lock, color: AppColors.primary),
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: AppColors.primary,
                               ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                  color: AppColors.primary,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
-                              ),
-                              border: InputBorder.none,
-                              floatingLabelStyle: const TextStyle(
-                                color: AppColors.grey600,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            border: InputBorder.none,
+                            floatingLabelStyle: const TextStyle(
+                              color: AppColors.grey600,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
-                      
+                      ),
+
                       // Password Strength Indicator
-                      if (_passwordValidation != null && _passwordController.text.isNotEmpty) ...[
+                      if (_passwordValidation != null &&
+                          _passwordController.text.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             color: AppColors.white.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _passwordValidation!.strength.color.withOpacity(0.3),
+                              color: _passwordValidation!.strength.color
+                                  .withOpacity(0.3),
                               width: 1,
                             ),
                           ),
@@ -377,7 +395,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                   Text(
                                     _passwordValidation!.strength.label,
                                     style: TextStyle(
-                                      color: _passwordValidation!.strength.color,
+                                      color:
+                                          _passwordValidation!.strength.color,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -386,54 +405,66 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                               ),
                               const SizedBox(height: 6),
                               LinearProgressIndicator(
-                                value: (_passwordValidation!.score / 6).clamp(0.0, 1.0),
-                                backgroundColor: AppColors.white.withOpacity(0.3),
+                                value: (_passwordValidation!.score / 6)
+                                    .clamp(0.0, 1.0),
+                                backgroundColor:
+                                    AppColors.white.withOpacity(0.3),
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                   _passwordValidation!.strength.color,
                                 ),
                               ),
-                              
+
                               // Requirements list
-                              if (_passwordValidation!.requirements.isNotEmpty) ...[
+                              if (_passwordValidation!
+                                  .requirements.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-                                ...(_passwordValidation!.requirements.map((req) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 2),
-                                  child: Text(
-                                    req,
-                                    style: TextStyle(
-                                      color: AppColors.white.withOpacity(0.9),
-                                      fontSize: 10,
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                ))),
+                                ...(_passwordValidation!.requirements
+                                    .map((req) => Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 2),
+                                          child: Text(
+                                            req,
+                                            style: TextStyle(
+                                              color: AppColors.white
+                                                  .withOpacity(0.9),
+                                              fontSize: 10,
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                        ))),
                               ],
-                              
+
                               // Suggestions for improvement
-                              if (_passwordValidation!.suggestions.isNotEmpty && 
+                              if (_passwordValidation!.suggestions.isNotEmpty &&
                                   _passwordValidation!.score < 4) ...[
                                 const SizedBox(height: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: AppColors.white.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: _passwordValidation!.suggestions.map((suggestion) => 
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 2),
-                                        child: Text(
-                                          suggestion,
-                                          style: TextStyle(
-                                            color: AppColors.white.withOpacity(0.8),
-                                            fontSize: 10,
-                                            fontStyle: FontStyle.italic,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: _passwordValidation!.suggestions
+                                        .map(
+                                          (suggestion) => Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 2),
+                                            child: Text(
+                                              suggestion,
+                                              style: TextStyle(
+                                                color: AppColors.white
+                                                    .withOpacity(0.8),
+                                                fontSize: 10,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ).toList(),
+                                        )
+                                        .toList(),
                                   ),
                                 ),
                               ],
@@ -441,51 +472,56 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                           ),
                         ),
                       ],
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Confirm Password Field
                       Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextFormField(
-                        controller: _confirmPasswordController,
-                        validator: _validateConfirmPassword,
-                        obscureText: _obscureConfirmPassword,
-                        style: const TextStyle(color: AppColors.grey800),
-                            decoration: InputDecoration(
-                              labelText: 'Şifre Tekrar',
-                              hintText: 'Şifreyi Tekrar Girin',
-                              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                              contentPadding: const EdgeInsets.only(bottom: 12.0),
-                              prefixIcon: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 18.0, vertical: 8),
-                                child: Icon(Icons.lock, color: AppColors.primary),
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                              _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-                              color: AppColors.primary,
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextFormField(
+                          controller: _confirmPasswordController,
+                          validator: _validateConfirmPassword,
+                          obscureText: _obscureConfirmPassword,
+                          style: const TextStyle(color: AppColors.grey800),
+                          decoration: InputDecoration(
+                            labelText: 'Şifre Tekrar',
+                            hintText: 'Şifreyi Tekrar Girin',
+                            prefixIconConstraints:
+                                const BoxConstraints(minWidth: 0, minHeight: 0),
+                            contentPadding: const EdgeInsets.only(bottom: 12.0),
+                            prefixIcon: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 18.0, vertical: 8),
+                              child: Icon(Icons.lock, color: AppColors.primary),
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _obscureConfirmPassword = !_obscureConfirmPassword;
-                              });
-                            },
-                         ),
-                              border: InputBorder.none,
-                              floatingLabelStyle: const TextStyle(
-                                color: AppColors.grey600,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: AppColors.primary,
                               ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscureConfirmPassword =
+                                      !_obscureConfirmPassword;
+                                });
+                              },
+                            ),
+                            border: InputBorder.none,
+                            floatingLabelStyle: const TextStyle(
+                              color: AppColors.grey600,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
+                      ),
                       const SizedBox(height: 16),
-                      
+
                       // Terms Checkbox
                       Row(
                         children: [
@@ -550,7 +586,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Register Button
                       ListenableBuilder(
                         listenable: _loadingManager,
@@ -558,17 +594,19 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                           return ProductionButton(
                             onPressed: _handleRegister,
                             text: 'Kayıt Ol',
-                            isLoading: _loadingManager.isLoading(LoadingOperations.register),
+                            isLoading: _loadingManager
+                                .isLoading(LoadingOperations.register),
                             isDisabled: !_acceptTerms,
                             backgroundColor: AppColors.white,
                             textColor: AppColors.primary,
-                            debounceTime: const Duration(seconds: 3), // 3 seconds for register
+                            debounceTime: const Duration(
+                                seconds: 3), // 3 seconds for register
                           );
                         },
                       ),
-                      
+
                       const SizedBox(height: 24),
-                      
+
                       // Info Text
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -620,9 +658,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                           ],
                         ),
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Already have account
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -651,13 +689,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                 ),
               ),
-              
+
               // Loading Overlay
               ListenableBuilder(
                 listenable: _loadingManager,
                 builder: (context, child) {
-                  if (!_loadingManager.isAnyLoading) return const SizedBox.shrink();
-                  
+                  if (!_loadingManager.isAnyLoading)
+                    return const SizedBox.shrink();
+
                   return Container(
                     color: Colors.black54,
                     child: const Center(
@@ -796,127 +835,128 @@ E-posta: lovenmeapp@gmail.com
   // GİZLİLİK POLİTİKASI İÇERİĞİ
   String _getPrivacyPolicyContent() {
     return '''
-Lovenme Gizlilik Politikası
-Güncelleme: 13/09/2025
+LOVENME GİZLİLİK POLİTİKASI
+Son Güncelleme Tarihi: 19.12.2025
 
-Bu gizlilik politikasının amacı, Lovenme tarafından işlenen kişisel verileriniz hakkında sizi şeffaf biçimde bilgilendirmektir. Lütfen dikkatle okuyunuz.
+Bu Gizlilik Politikası, Lovenme mobil uygulamasının ("Uygulama") kullanımı sırasında işlenen kişisel verilere ilişkin olarak kullanıcıları bilgilendirmek amacıyla hazırlanmıştır.
 
-Önemli not: Aşağıdaki metin, AB GDPR ve Türkiye KVKK (6698) ile uyum gözetilerek hazırlanmıştır. Üçüncü taraf servisler (ör. Apple/Google/ödeme altyapıları, harita/analitik/bildirim sağlayıcıları) için kendi gizlilik politikaları geçerlidir.
+Lovenme, kişisel verilerinizi yürürlükteki mevzuata uygun olarak; başta 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) olmak üzere ilgili düzenlemelere uygun şekilde işler.
 
-TANIMLAR
+1. Veri Sorumlusu
+Unvan: Noesis Social
+Yetkili: Burak Ohrili
+Adres: Gazi Osman Paşa Mah. 5499/1 Sokak No:9 D:2 Bornova / İzmir / Türkiye
+E-posta: support@lovenme.app
 
-Uygulama (Lovenme): iOS/Android mağazalarında Lovenme.
-Beğeni: Bir profili beğendiğinizi gösteren eylem.
-Süper Beğeni: Öne çıkan beğeni.
-Check-in: Bir mekâna girişinizi/ziyaretinizi uygulamada bildirmeniz.
-Muhtar: Belirli bir süre için mekânın "lideri" unvanı.
-Harita: Yakınınızdaki/sponsorlu mekânları keşfetmeyi sağlayan görünüm.
-Feed (Akış): Check-in paylaşımlarının göründüğü alan.
-Crush/Match (Eşleşme): İki profilin karşılıklı beğenmesi ile oluşan durum.
-Mesajlar: Eşleşme sonrası açılan özel sohbet.
-Favori Mekânlar: Kullanıcının yıldızladığı mekânlar.
-Hesap: Üyeye ait kişisel alan.
-Üye: Uygulamaya kayıtlı gerçek kişi.
-Veri Sorumlusu: BURAK OHRİLİ – Gazi Osman Paşa Mah. 5499/1 Sokak No:9 D:2 Bornova / İzmir.
-İrtibat: support@lovenme.app, KVKK için: kvkk@lovenme.app
+2. İşlenen Kişisel Veriler
+Uygulama kapsamında aşağıdaki kişisel veriler işlenmektedir:
 
-1. Bu Politikanın Kapsamı
-Bu politika, Lovenme tarafından sunulan tüm hizmetler için geçerlidir. Üçüncü taraf servislerine (haritalar, ödeme altyapıları, bildirim/analitik sağlayıcıları) ait veri işleme faaliyetleri kendi politikalarına tabidir.
+2.1. Kimlik ve İletişim Bilgileri
+• Görünen ad (profil adı)
+• E-posta adresi
+• Telefon numarası
 
-2. Topladığımız Veriler
+Bu veriler, kullanıcı hesabının oluşturulması, doğrulanması ve güvenliğinin sağlanması amacıyla işlenir.
 
-2.1 Zorunlu Veriler
-- Tanımlama verileri: Ad, yaş, cinsiyet, en az 1 yüz fotoğrafı
-- İletişim: E-posta ve/veya telefon numarası
-- Hesap/etkileşim verileri: Kayıt/oturum tarihleri, beğeni/eşleşme/mesaj kayıtları
-- Cihaz/teknik veriler: Uygulama sürümü, işletim sistemi, IP, hata kayıtları
-- Konum: Konum izni ile coğrafi konum
+2.2. Kullanıcı İçerikleri
+• Profil fotoğrafları
+• Mesajlaşma (DM) içerikleri
+• Check-in paylaşımları ve açıklamaları
 
-2.2 Hizmet Fonksiyonları İçin Gerekli Veriler
-- Check-in ve karşılaşma noktaları
-- Harita görünümü ve sıralamalar
-- Arama tercihleri: Yaş aralığı, cinsiyet filtreleri
-- Mesaj içerikleri meta verileri
-- Satın alma/abonelik kayıtları
+Mesaj içerikleri yalnızca hizmetin sunulması amacıyla saklanır ve üçüncü kişilerle paylaşılmaz.
 
-2.3 İsteğe Bağlı Veriler
-- Favori mekânlar ve hobiler
+2.3. Konum Bilgisi
+• Kesin konum bilgisi (precise location)
 
-3. Verileri Nasıl Topluyoruz?
-- Doğrudan sizden: Kayıt, profil düzenleme, tercih yönetimi
-- Otomatik: Uygulama kullanımı, cihaz/teknik veriler, konum
-- Üçüncü taraflardan: Apple/Google kimlik doğrulama, harita/analitik sağlayıcıları
+Konum bilgisi yalnızca:
+• Yakındaki mekânları göstermek,
+• Check-in yapılmasını sağlamak,
+• Son 24 saatlik check-in'leri görüntülemek
 
-4. İşleme Amaçları ve Hukuki Dayanaklar
+amaçlarıyla, kullanıcının açık izniyle işlenir.
+Uygulama, arka planda sürekli konum takibi yapmaz.
 
-4.1 Sözleşmenin ifası
-- Hesap açma/kapama, profil oluşturma
-- Temel hizmetlerin sunulması (beğeni, eşleşme, mesaj, check-in)
-- Abonelik/ücretli özelliklerin işletimi
+2.4. Kullanım ve Teknik Veriler
+• Kullanıcı kimliği (User ID)
+• Uygulama içi etkileşimler (eşleşme, mesajlaşma, check-in)
+• Hata ve çökme kayıtları (varsa)
 
-4.2 Rıza
-- Konum verisiyle yakınınızdaki profillerin önerilmesi
-- Profil doğrulama için biyometri
-- Uygulama içi kişiselleştirilmiş reklam
+Bu veriler, uygulamanın güvenli ve düzgün çalışmasını sağlamak amacıyla kullanılır.
 
-4.3 Meşru menfaat
-- Profil önerileri
-- Sponsorlu mekân önerileri
-- Kötüye kullanım/sahtecilik tespiti
-- Hizmeti geliştirmek için analiz
+2.5. Satın Alma Bilgileri
+• Abonelik ve satın alma durumu
 
-4.4 Yasal yükümlülük
-- Adli/idarî mercilerden gelen taleplere yanıt
-- KVKK ve GDPR kapsamındaki hak başvurularının yönetimi
+Ödeme kartı veya banka bilgileri Lovenme tarafından toplanmaz veya saklanmaz. Tüm ödeme işlemleri ilgili uygulama mağazaları (Apple App Store vb.) üzerinden gerçekleştirilir.
 
-5. Reklam, Pazarlama ve Bildirimler
-- Bülten ve uygulama içi öneriler
-- Uygulama içi reklam (onay ile)
-- Push bildirimler (tercihlerden yönetilebilir)
+3. Kişisel Verilerin Toplanma Yöntemi
+Kişisel veriler;
+• Kullanıcı tarafından doğrudan sağlanan bilgiler,
+• Uygulama kullanımı sırasında otomatik olarak oluşan veriler,
+• Kimlik doğrulama ve bildirim hizmetleri aracılığıyla
+toplanmaktadır.
 
-6. Güvenlik, Sahtecilik ve Tacizle Mücadele
-- Otomatik ve manuel denetimler
-- Profil doğrulama (opsiyonel)
-- Askıya alma/engelleme/silme
+4. Kişisel Verilerin İşlenme Amaçları
+Kişisel veriler aşağıdaki amaçlarla işlenmektedir:
+• Kullanıcı hesabının oluşturulması ve yönetilmesi
+• Mesajlaşma, eşleşme ve check-in hizmetlerinin sunulması
+• Yakındaki mekânların ve kullanıcıların gösterilmesi
+• Güvenlik, sahtecilik ve kötüye kullanımın önlenmesi
+• Uygulamanın teknik olarak sorunsuz çalışmasının sağlanması
+• Yasal yükümlülüklerin yerine getirilmesi
 
-7. Verilerin Paylaşımı
-- Yetkili Lovenme personeli
-- Hizmet sağlayıcılar/iş ortakları
-- Resmî makamlar/mahkemeler (yasal talepler)
-- Şirket işlemleri (birleşme/devralma)
+5. Üçüncü Taraf Hizmet Sağlayıcılar
+Uygulama kapsamında aşağıdaki hizmet sağlayıcılardan yararlanılmaktadır:
+• Google Firebase (Authentication, Firestore, Cloud Messaging)
+• NETGSM Telekomünikasyon A.Ş. (SMS doğrulama hizmetleri)
 
-8. Yurt Dışına Aktarım
-Veriler, Türkiye, AB/AEA veya güvenli üçüncü ülkelerde saklanıp işlenebilir. AB dışına aktarımlarda gerekli koruma araçları uygulanır.
+Bu hizmet sağlayıcılar, kişisel verileri yalnızca ilgili hizmeti sunmak amacıyla ve gizlilik yükümlülükleri çerçevesinde işler.
 
-9. Saklama Süreleri
-- Hesap süresi + 24 ay pasiflikte hesap silinir
-- Silinen/banlanan hesap verileri 24 ay aktif, ardından 12 ay arşivde
-- Konum ve karşılaşma noktaları: Son konum 1 ay, karşılaşma 6 ay
+6. Reklam, Pazarlama ve Takip
+Lovenme uygulamasında:
+• Üçüncü taraf reklam hizmetleri,
+• Kişiselleştirilmiş reklam,
+• Pazarlama veya yeniden hedefleme,
+• Uygulamalar arası kullanıcı takibi
+bulunmamaktadır.
 
-10. Haklarınız (KVKK & GDPR)
-- Erişim / Bilgi talebi
-- Düzeltme / Güncelleme
-- Silme ("unutulma")
-- İşlemenin kısıtlanması
-- İtiraz
-- Veri taşınabilirliği
-- Açık rızanın geri çekilmesi
+Kişisel veriler, reklam veya pazarlama amacıyla kullanılmaz ve paylaşılmaz.
 
-Başvuru: support@lovenme.app, KVKK/GDPR için: kvkk@lovenme.app
+7. Kişisel Verilerin Saklama Süresi
+Kişisel veriler:
+• Kullanıcı hesabı aktif olduğu sürece,
+• Hesap silme talebi sonrasında ise yasal yükümlülükler saklı kalmak kaydıyla
+makul süre boyunca saklanır ve ardından silinir veya anonim hale getirilir.
 
-11. Reşit Olmayanlar
-Lovenme 18 yaş altı kişilere yönelik değildir. Bu durumu tespit edersek hesap kapatılır.
+8. Kullanıcı Hakları
+KVKK ve GDPR kapsamında kullanıcılar:
+• Kişisel verilerine erişme,
+• Düzeltme talep etme,
+• Silme veya yok edilmesini isteme,
+• Veri işlemeye itiraz etme,
+• Açık rızayı geri çekme
+haklarına sahiptir.
 
-12. Güvenlik
-Endüstri standardı teknik ve idari önlemler (şifreleme, erişim kontrolleri) uygularız.
+Bu haklara ilişkin talepler support@lovenme.app adresi üzerinden iletilebilir.
 
-13. Politika Değişiklikleri
-Bu politika güncellenebilir. Önemli değişiklikleri uygulama içi bildirim ve/veya e-posta ile duyururuz.
+9. Hesap Silme
+Kullanıcılar, uygulama içindeki ilgili ayarlar aracılığıyla:
+• Hesaplarını geçici olarak dondurabilir,
+• Hesaplarını kalıcı olarak silebilir.
 
-14. İletişim
-Genel destek: support@lovenme.app
-KVKK/GDPR: kvkk@lovenme.app
-Posta: Veri Koruma İrtibatı – Lovenme, Gazi Osman Paşa Mah. 5499/1 Sokak No: 9 D:2 Bornova / İzmir / Türkiye
+Hesap silme işlemi sonrası kişisel veriler, yasal zorunluluklar dışında sistemlerden kaldırılır.
+
+10. Çocukların Gizliliği
+Lovenme, 18 yaşından küçük kullanıcılara yönelik değildir. Reşit olmayan kullanıcılara ait hesaplar tespit edilmesi halinde silinir.
+
+11. Güvenlik
+Lovenme, kişisel verilerin gizliliğini ve güvenliğini sağlamak amacıyla teknik ve idari güvenlik önlemleri uygular. Ancak internet üzerinden yapılan veri iletimlerinin %100 güvenli olduğu garanti edilemez.
+
+12. Politika Değişiklikleri
+Bu Gizlilik Politikası zaman zaman güncellenebilir. Önemli değişiklikler uygulama içinden veya uygun iletişim kanallarıyla kullanıcılara bildirilir.
+
+13. İletişim
+Gizlilik politikası ve kişisel verilerle ilgili her türlü soru ve talep için:
+📧 support@lovenme.app
 ''';
   }
 }

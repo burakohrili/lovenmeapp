@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_colors.dart';
 import 'profile_setup_step4_page.dart';
 import 'user_profile_provider.dart';
@@ -136,12 +138,33 @@ class _ProfileSetupStep3PageState extends ConsumerState<ProfileSetupStep3Page> {
 
     ref.read(userProfileProvider.notifier).updateHobbies(selectedHobbies.toList());
     
+    // 🔥 YENİ: Hobileri Firebase'e kaydet
+    _saveHobbiesToFirestore(selectedHobbies.toList());
+    
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const ProfileSetupStep4Page(),
       ),
     );
+  }
+  
+  // 🔥 YENİ: Hobileri Firestore'a kaydet
+  Future<void> _saveHobbiesToFirestore(List<String> hobbies) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'hobbies': hobbies,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Hata olsa bile devam et
+    }
   }
 
   @override

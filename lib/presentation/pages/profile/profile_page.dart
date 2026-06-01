@@ -60,6 +60,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
   // Diamond balance
   int _userDiamondBalance = 0;
   StreamSubscription<int>? _diamondBalanceSubscription;
+
+  // IAP fiyatları — Google Play / App Store'dan çekilen gerçek fiyatlar
+  Map<String, String> _iapPrices = {};
+  /// Store'da aktif olan ürün key'leri — aktif değilse kart gizlenir
+  Set<String> _iapAvailableKeys = {};
+  bool _iapProductsLoaded = false; // Yükleme tamamlandı mı?
+  final IAPService _iapService = IAPService();
   
   Stream<DocumentSnapshot>? userStream;
   bool isUploadingPhoto = false;
@@ -80,6 +87,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
     _loadInitialDiamondBalance(); // Elmas bakiyesini yükle
     _startDiamondBalanceListener(); // Elmas listener'ını başlat
     _muhtarService.cleanupDuplicateMayorEntries(); // Duplicate mayor kayıtlarını temizle
+    _loadIAPPrices(); // Google Play / App Store fiyatlarını yükle
     _loadCachedProfile().then((_) {
       // Cache yüklendikten sonra stream'i başlat
       _initUserStream();
@@ -1939,6 +1947,28 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
     }
   }
 
+  /// Google Play / App Store'dan gerçek ürün fiyatlarını çek
+  Future<void> _loadIAPPrices() async {
+    // IAP initialize edilmemişse bekle (max 5 sn)
+    for (int i = 0; i < 10; i++) {
+      if (_iapService.products.isNotEmpty) break;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    if (!mounted) return;
+    final prices = _iapService.getAllPriceStrings();
+    // Hangi ürünler store'da aktif?
+    final availableKeys = _iapService.getAvailablePackageKeys('diamonds_')
+      ..addAll(_iapService.getAvailablePackageKeys('super_chats_'))
+      ..addAll(_iapService.getAvailablePackageKeys('premium_'));
+    if (mounted) {
+      setState(() {
+        _iapPrices = prices;
+        _iapAvailableKeys = availableKeys;
+        _iapProductsLoaded = true;
+      });
+    }
+  }
+
   /// Elmas bakiye listener'ını başlat
   void _startDiamondBalanceListener() {
     _diamondBalanceSubscription?.cancel();
@@ -2081,7 +2111,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
   }
 
   /// Direkt IAP ile elmas satın al (Google Pay yok)
-  Future<void> _purchaseDiamondsDirectly(int quantity, double price) async {
+  Future<void> _purchaseDiamondsDirectly(int quantity, double price, {BuildContext? sheetContext}) async {
     // Product ID mapping
     String? productId;
     switch (quantity) {
@@ -2111,7 +2141,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
     }
 
     try {
-      
+      // Bottom sheet'in kapalı olup olmadığını takip et
+      bool bottomSheetClosed = false;
+
       final success = await IAPService().buyProduct(
         productId,
         onSuccess: () {
@@ -2120,10 +2152,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
           // Bakiyeyi yenile
           _loadInitialDiamondBalance();
           
-          // Bottom sheet'i kapat
-          Navigator.pop(context);
+          // Bottom sheet hâlâ açıksa kapat (sheetContext ile — profil sayfasını kapatma!)
+          if (!bottomSheetClosed) {
+            bottomSheetClosed = true;
+            try { 
+              if (sheetContext != null && Navigator.of(sheetContext).canPop()) {
+                Navigator.of(sheetContext).pop();
+              }
+            } catch (_) {}
+          }
           
-          // Başarı mesajı
+          // Başarı mesajı (profil page context'i ile)
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -2150,6 +2189,25 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
             ),
           );
           
+        },
+        onPendingTimeout: () {
+          // Ödeme hâlâ beklemede — bottom sheet'i kapat (sheetContext ile!), profil sayfası açık kalsın
+          if (!mounted) return;
+          if (!bottomSheetClosed) {
+            bottomSheetClosed = true;
+            try {
+              if (sheetContext != null && Navigator.of(sheetContext).canPop()) {
+                Navigator.of(sheetContext).pop();
+              }
+            } catch (_) {}
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏳ Ödeme onay bekliyor. Onaylandığında elmaslarınız otomatik eklenecek.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
         },
       );
       
@@ -2222,7 +2280,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
                     ),
                     const SizedBox(height: 20),
                     // Hızlı satın alma seçenekleri
-                    _buildDiamondPurchaseOptions(),
+                    _buildDiamondPurchaseOptions(sheetContext: context),
                   ],
                 ),
               ),
@@ -2235,9 +2293,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
   }
 
   /// Elmas satın alma seçenekleri widget'ı - Horizontal scroll ile map page tasarımı
-  Widget _buildDiamondPurchaseOptions() {
-    // IAPConfig'den elmas paketlerini al
-    const packages = IAPConfig.diamondPackages;
+  Widget _buildDiamondPurchaseOptions({BuildContext? sheetContext}) {
+    // IAPConfig'den elmas paketlerini al; store'da aktif olmayanları filtrele
+    final allPackages = IAPConfig.diamondPackages;
+    // _iapProductsLoaded false iken tüm paketleri göster (yükleniyor state'i)
+    final packages = _iapProductsLoaded
+        ? allPackages
+            .where((p) => _iapAvailableKeys.contains(p['id']))
+            .toList()
+        : allPackages;
     
     // Icon ve renk ayarları
     final icons = ['⚡', '🏆', '💎', '🌟', '👑', '🔥'];
@@ -2250,6 +2314,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
       Colors.deepPurple,
     ];
     
+    if (packages.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Text(
+          'Şu anda satın alınabilir elmas paketi bulunmuyor.',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+      );
+    }
+
     return SizedBox(
       height: 240, // Sabit yükseklik
       child: SingleChildScrollView(
@@ -2262,12 +2336,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
                 title: '${icons[i % icons.length]} ${packages[i]['title']}',
                 diamonds: packages[i]['quantity'],
                 price: packages[i]['originalPrice'],
+                priceString: _iapPrices[packages[i]['id']],
                 description: packages[i]['description'],
                 color: colors[i % colors.length],
                 gradientIntensity: 0.1 + (i * 0.1),
                 onTap: () => _purchaseDiamondsDirectly(
                   packages[i]['quantity'],
                   packages[i]['originalPrice'],
+                  sheetContext: sheetContext,
                 ),
                 isPopular: packages[i]['isPopular'] ?? false,
               ),
@@ -2421,6 +2497,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
     required String title,
     required int diamonds,
     required double price,
+    String? priceString,
     required String description,
     required Color color,
     required VoidCallback onTap,
@@ -2502,7 +2579,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
                             ),
                           ),
                           Text(
-                            '₺${price.toStringAsFixed(2)}',
+                            priceString ?? '₺${price.toStringAsFixed(2)}',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,

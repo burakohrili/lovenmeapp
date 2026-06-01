@@ -124,7 +124,9 @@ class _IAPPaymentButtonState extends State<IAPPaymentButton> {
         widget.internalProductId,
         onSuccess: () {
           // 🛡️ MOUNT CHECK: Widget dispose olduysa hiçbir UI işlem yapma
+          debugPrint('[IAP_BTN] onSuccess tetiklendi, mounted=$mounted');
           if (!mounted) {
+            debugPrint('[IAP_BTN] onSuccess: widget unmounted, atlanıyor');
             return;
           }
           
@@ -185,6 +187,27 @@ class _IAPPaymentButtonState extends State<IAPPaymentButton> {
           if (widget.onPaymentError != null) {
             widget.onPaymentError!(errorMessage);
           }
+        },
+        onPendingTimeout: () {
+          // ─────────────────────────────────────────────────────────────────
+          // PENDING TIMEOUT: Ödeme hâlâ onay bekliyor (örn. "biraz sonra
+          // kabul edilir" test kartı). HATA DEĞİL — spinner'ı kapat,
+          // kullanıcıya bilgi ver. Bakiye Google Play onayladığında gelecek.
+          // ─────────────────────────────────────────────────────────────────
+          if (!mounted) return;
+          setState(() {
+            _isLoading = false;
+            _isProcessingPayment = false;
+            _status = 'Onay bekleniyor...';
+            _hasError = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏳ Ödeme onay bekliyor. Onaylandığında bakiyeniz otomatik güncellenecek.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
         },
       );
       

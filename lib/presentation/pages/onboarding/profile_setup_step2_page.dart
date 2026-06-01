@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import '../../../core/theme/app_colors.dart';
@@ -217,6 +219,9 @@ class _ProfileSetupStep2PageState extends ConsumerState<ProfileSetupStep2Page> {
     // Provider'ı güncelle
     ref.read(userProfileProvider.notifier).updateLocalPhotoPaths(existingPaths);
     
+    // 🔥 YENİ: Fotoğraf sayısını Firebase'e kaydet
+    _savePhotoCountToFirestore(existingPaths.length);
+    
     
     // Step 3'e geçiş
     Navigator.push(
@@ -225,6 +230,24 @@ class _ProfileSetupStep2PageState extends ConsumerState<ProfileSetupStep2Page> {
         builder: (context) => const ProfileSetupStep3Page(),
       ),
     );
+  }
+  
+  // 🔥 YENİ: Fotoğraf sayısını Firestore'a kaydet (dosyalar henüz upload edilmedi)
+  Future<void> _savePhotoCountToFirestore(int photoCount) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'localPhotoCount': photoCount, // Geçici alan
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Hata olsa bile devam et
+    }
   }
 
   void _showPhotoSourceDialog() {

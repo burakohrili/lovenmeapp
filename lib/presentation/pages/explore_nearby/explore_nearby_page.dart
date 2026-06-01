@@ -86,20 +86,24 @@ class _ExploreNearbyPageState extends ConsumerState<ExploreNearbyPage> {
   }
 
   /// 📥 INITIAL LOAD: Cache'den hızlı yükle
-  Future<void> _loadVenues({bool fromCache = false}) async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _loadVenues({bool fromCache = false, bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
     
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
       
       if (currentUser == null) {
-        setState(() {
-          _errorMessage = 'Lütfen giriş yapın';
-          _isLoading = false;
-        });
+        if (showLoading) {
+          setState(() {
+            _errorMessage = 'Lütfen giriş yapın';
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -111,15 +115,19 @@ class _ExploreNearbyPageState extends ConsumerState<ExploreNearbyPage> {
       
       setState(() {
         _venues = venues;
-        _isLoading = false;
+        if (showLoading) {
+          _isLoading = false;
+        }
         _hasMore = venues.length >= _pageSize;
       });
       
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Mekanlar yüklenirken bir hata oluştu';
-        _isLoading = false;
-      });
+      if (showLoading) {
+        setState(() {
+          _errorMessage = 'Mekanlar yüklenirken bir hata oluştu';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -258,12 +266,18 @@ class _ExploreNearbyPageState extends ConsumerState<ExploreNearbyPage> {
     );
   }
 
-  void _navigateToVenueDetail(ExploreVenue venue) {
-    Navigator.push(
+  void _navigateToVenueDetail(ExploreVenue venue) async {
+    // Venue detail'e git ve geri döndüğünde sayfayı sessizce yenile
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => VenueDetailPage(venueId: venue.id),
       ),
     );
+    
+    // Geri dönüldüğünde venue listesini sessizce yenile (loading göstermeden)
+    if (mounted) {
+      _loadVenues(fromCache: false, showLoading: false);
+    }
   }
 }

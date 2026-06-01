@@ -20,6 +20,9 @@ class PaymentPackage {
   final int amount;
   final int? diamonds; // For diamond packages
   final double price;
+  /// Store'dan gelen formatlanmış fiyat stringi (ör. "₺499,99").
+  /// null ise widget kendi formatlar.
+  final String? priceString;
   final double originalPrice;
   final double discountPercentage;
   final String description;
@@ -36,6 +39,7 @@ class PaymentPackage {
     required this.amount,
     this.diamonds,
     required this.price,
+    this.priceString,
     required this.originalPrice,
     this.discountPercentage = 0,
     required this.description,

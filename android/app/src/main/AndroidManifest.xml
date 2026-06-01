@@ -17,8 +17,6 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     
@@ -33,7 +31,7 @@
 
         <meta-data 
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyDNgRNKZOQ7o7Ec_tb_gnLS958cWqJGyS0"/>
+            android:value="AIzaSyCj4GNRHo2-ofM33k8Av3Zap1h5UGkVhk4"/>
         <!-- Notification Channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

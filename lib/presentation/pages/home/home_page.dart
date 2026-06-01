@@ -1561,7 +1561,7 @@ class _FeedPostWidgetState extends State<FeedPostWidget>
           if (userDoc.exists) {
             final userData = userDoc.data()!;
             isPremium = userData['isPremium'] ?? false;
-            userDiamondBalance = userData['diamondBalance'] ?? 0;
+            userDiamondBalance = userData['diamonds'] ?? 0;
           }
         } catch (e) {}
       }

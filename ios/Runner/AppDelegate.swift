@@ -14,7 +14,7 @@ import UserNotifications
     FirebaseApp.configure()
     
     // Google Maps API Key'i yapılandır
-    GMSServices.provideAPIKey("AIzaSyDNgRNKZOQ7o7Ec_tb_gnLS958cWqJGyS0")
+    GMSServices.provideAPIKey("AIzaSyCj4GNRHo2-ofM33k8Av3Zap1h5UGkVhk4")
     
     // Notification delegate'i set et
     if #available(iOS 10.0, *) {

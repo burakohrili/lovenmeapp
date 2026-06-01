@@ -1,17 +1,25 @@
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
-const {onCall} = require("firebase-functions/v2/https");
+const {onCall, onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {getAuth} = require("firebase-admin/auth");
 const {Resend} = require("resend");
-const {defineString} = require("firebase-functions/params");
+const {defineString, defineSecret} = require("firebase-functions/params");
 const functions = require("firebase-functions");
+const axios = require("axios");
+const cors = require("cors")({origin: true});
+const {GoogleAuth} = require("google-auth-library");
 
 initializeApp();
 
-// Parametreyi tanımla
+// Parametreleri tanımla
 const resendKey = defineString("RESEND_KEY");
+const googleServiceAccountKey = defineSecret("GOOGLE_SERVICE_ACCOUNT_KEY");
+const netgsmUsercode = defineString("NETGSM_USERCODE");
+const netgsmPassword = defineString("NETGSM_PASSWORD");
+const netgsmHeader = defineString("NETGSM_HEADER");
 
 // Push notification request handler - yeni sistem
 exports.handleNotificationRequest = onDocumentCreated(
@@ -239,7 +247,7 @@ exports.sendVerificationEmail = onCall(
               </p>
             </div>
             <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
-              © 2025 LoveNMe. Tüm hakları saklıdır.<br>
+              © 2026 LoveNMe. Tüm hakları saklıdır.<br>
               <a href="https://lovenme.app" style="color: #667eea; text-decoration: none;">lovenme.app</a>
             </div>
           </div>
@@ -1070,7 +1078,7 @@ exports.sendEmailChangeVerification = onCall(
               </p>
             </div>
             <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
-              © 2025 LoveNMe. Tüm hakları saklıdır.<br>
+              © 2026 LoveNMe. Tüm hakları saklıdır.<br>
               <a href="https://lovenme.app" style="color: #667eea; text-decoration: none;">lovenme.app</a>
             </div>
           </div>
@@ -1148,7 +1156,7 @@ exports.sendPasswordChangeVerification = onCall(
               </p>
             </div>
             <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
-              © 2025 LoveNMe. Tüm hakları saklıdır.<br>
+              © 2026 LoveNMe. Tüm hakları saklıdır.<br>
               <a href="https://lovenme.app" style="color: #667eea; text-decoration: none;">lovenme.app</a>
             </div>
           </div>
@@ -1234,7 +1242,7 @@ exports.sendPasswordResetEmail = onCall(
               </p>
             </div>
             <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
-              © 2025 LoveNMe. Tüm hakları saklıdır.<br>
+              © 2026 LoveNMe. Tüm hakları saklıdır.<br>
               <a href="https://lovenme.app" style="color: #E91E63; text-decoration: none;">lovenme.app</a>
             </div>
           </div>
@@ -1254,3 +1262,1777 @@ exports.sendPasswordResetEmail = onCall(
     }
   }
 );
+
+// RESET USER PASSWORD - KULLANICI ŞİFRESİNİ SIFIRLA
+exports.resetUserPassword = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    const {email, newPassword, verificationCode} = request.data;
+    
+    console.log(`🔐 Şifre sıfırlama isteği: ${email}`);
+    
+    // Input validation
+    if (!email || !newPassword || !verificationCode) {
+      console.error("Email, yeni şifre ve doğrulama kodu gerekli");
+      return {success: false, error: "Email, yeni şifre ve doğrulama kodu gerekli"};
+    }
+    
+    // Password validation
+    if (newPassword.length < 6) {
+      return {success: false, error: "Şifre en az 6 karakter olmalı"};
+    }
+    
+    try {
+      // Doğrulama kodunu kontrol et
+      const codeDoc = await getFirestore()
+        .collection("password_reset_codes")
+        .doc(email)
+        .get();
+      
+      if (!codeDoc.exists) {
+        console.error("Doğrulama kodu bulunamadı");
+        return {success: false, error: "Doğrulama kodu bulunamadı"};
+      }
+      
+      const codeData = codeDoc.data();
+      
+      // Kodun süresini kontrol et
+      if (Date.now() > codeData.expiresAt) {
+        console.error("Doğrulama kodunun süresi dolmuş");
+        return {success: false, error: "Doğrulama kodunun süresi dolmuş"};
+      }
+      
+      // Kodu doğrula
+      if (codeData.code !== verificationCode) {
+        console.error("Geçersiz doğrulama kodu");
+        return {success: false, error: "Geçersiz doğrulama kodu"};
+      }
+      
+      // Kullanıcıyı email ile bul
+      const userRecord = await getAuth().getUserByEmail(email);
+      
+      if (!userRecord) {
+        console.error("Kullanıcı bulunamadı");
+        return {success: false, error: "Kullanıcı bulunamadı"};
+      }
+      
+      // Şifreyi güncelle
+      await getAuth().updateUser(userRecord.uid, {
+        password: newPassword,
+      });
+      
+      // Doğrulama kodunu sil
+      await getFirestore()
+        .collection("password_reset_codes")
+        .doc(email)
+        .delete();
+      
+      console.log(`✅ Şifre başarıyla güncellendi: ${email}`);
+      return {success: true, message: "Şifre başarıyla güncellendi"};
+    } catch (error) {
+      console.error("Şifre güncelleme hatası:", error);
+      return {success: false, error: error.message || "Şifre güncellenemedi"};
+    }
+  }
+);
+
+// 🗺️ GOOGLE PLACES API PROXY - Bot Manager için (CORS bypass)
+exports.searchPlaces = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    const {query, location, radius, type} = request.data;
+    
+    console.log(`🔍 Google Places arama: "${query}"`);
+    
+    if (!query || query.trim().length < 3) {
+      return {success: false, error: "Arama sorgusu en az 3 karakter olmalı"};
+    }
+    
+    // Firebase Functions v2 için environment variable kullan
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    
+    if (!apiKey) {
+      console.error("Google Places API Key tanımlanmamış");
+      return {success: false, error: "Google Places API yapılandırılmamış"};
+    }
+    
+    try {
+      // Text Search API kullan
+      const response = await axios.get(
+        "https://maps.googleapis.com/maps/api/place/textsearch/json",
+        {
+          params: {
+            query: query,
+            key: apiKey,
+            language: "tr",
+            ...(location && {location: location}), // "lat,lng" formatında
+            ...(radius && {radius: radius}),
+            ...(type && {type: type}),
+          },
+        }
+      );
+      
+      if (response.data.status !== "OK" && response.data.status !== "ZERO_RESULTS") {
+        console.error("Google Places API hatası:", response.data.status);
+        return {
+          success: false,
+          error: `Google Places API hatası: ${response.data.status}`,
+        };
+      }
+      
+      console.log(`✅ ${response.data.results.length} sonuç bulundu`);
+      
+      return {
+        success: true,
+        results: response.data.results,
+        status: response.data.status,
+      };
+      
+    } catch (error) {
+      console.error("Google Places arama hatası:", error.message);
+      return {
+        success: false,
+        error: error.message || "Mekan araması başarısız",
+      };
+    }
+  }
+);
+
+// 📍 GOOGLE PLACES DETAILS PROXY - Place ID ile detay getir (HTTP endpoint)
+exports.getPlaceDetails = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const placeId = req.method === 'GET' ? req.query.placeId : req.body.placeId;
+        console.log('📍 Place detay getiriliyor:', placeId);
+
+        if (!placeId) {
+          res.status(400).json({ success: false, error: 'Place ID gerekli' });
+          return;
+        }
+
+        // Firebase Functions v2 için environment variable kullan
+        const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+        if (!apiKey) {
+          console.error('Google Places API Key tanımlanmamış');
+          res.status(500).json({ success: false, error: 'Google Places API yapılandırılmamış' });
+          return;
+        }
+
+        const response = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
+          params: {
+            place_id: placeId,
+            key: apiKey,
+            language: 'tr',
+            fields: 'name,formatted_address,geometry,rating,types,vicinity,opening_hours',
+          },
+        });
+
+        if (response.data.status !== 'OK') {
+          console.error('Google Places API hatası:', response.data.status);
+          res.status(502).json({ success: false, error: `Google Places API hatası: ${response.data.status}` });
+          return;
+        }
+
+        console.log('✅ Place detayı alındı:', response.data.result.name);
+        res.status(200).json({ success: true, result: response.data.result, status: response.data.status });
+      } catch (error) {
+        console.error('Place detay hatası:', error && error.message ? error.message : error);
+        res.status(500).json({ success: false, error: error.message || 'Place detayı alınamadı' });
+      }
+    });
+  }
+);
+
+// 🔔 BOT PERFORM CHECK-IN - Server-side check-in to avoid client-side Firestore rules
+exports.botPerformCheckIn = onRequest(
+  { 
+    region: 'us-central1',
+    invokeMode: 'HTTPS',
+    cors: true,
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const body = req.method === 'GET' ? req.query : req.body;
+        const botId = body.botId;
+        const placeId = body.placeId;
+
+        if (!botId || !placeId) {
+          res.status(400).json({ success: false, error: 'botId ve placeId gerekli' });
+          return;
+        }
+
+        // Firebase Functions v2 için environment variable kullan
+        const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+        if (!apiKey) {
+          res.status(500).json({ success: false, error: 'Google Places API yapılandırılmamış' });
+          return;
+        }
+
+        // Get place details from Google Places
+        const response = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
+          params: {
+            place_id: placeId,
+            key: apiKey,
+            language: 'tr',
+            fields: 'name,formatted_address,geometry,rating,types,vicinity,opening_hours',
+          },
+        });
+
+        if (response.data.status !== 'OK') {
+          res.status(502).json({ success: false, error: `Google Places API hatası: ${response.data.status}` });
+          return;
+        }
+
+        const place = response.data.result;
+        const venueDetail = {
+          place_id: placeId,
+          name: place.name,
+          category: (place.types && place.types[0]) || 'restaurant',
+          rating: place.rating || 4.5,
+          latitude: place.geometry.location.lat,
+          longitude: place.geometry.location.lng,
+          vicinity: place.vicinity || place.formatted_address,
+        };
+
+        const db = getFirestore();
+        // FieldValue is imported at file top as FieldValue
+
+        // Get bot user data for userName and userPhoto
+        const botUserDoc = await db.collection('users').doc(botId).get();
+        if (!botUserDoc.exists) {
+          res.status(404).json({ success: false, error: 'Bot kullanıcısı bulunamadı' });
+          return;
+        }
+
+        const botUserData = botUserDoc.data();
+        let userName = botUserData.name || 'Bot';
+        if (botUserData.surname) {
+          userName = `${userName} ${botUserData.surname[0]}.`;
+        }
+        const userPhoto = (botUserData.photos && botUserData.photos.length > 0) ? botUserData.photos[0] : null;
+        const isPremium = botUserData.isPremium || false;
+        const totalCheckIns = (botUserData.totalCheckIns || 0) + 1;
+
+        // Create check_in document (matching Flutter app structure)
+        const checkInRef = await db.collection('check_ins').add({
+          userId: botId,
+          userName: userName,
+          userPhoto: userPhoto,
+          isPremium: isPremium,
+          venueId: placeId,
+          venueName: place.name,
+          venueCategory: (place.types && place.types[0]) || 'restaurant',
+          venueLocation: {
+            latitude: place.geometry.location.lat,
+            longitude: place.geometry.location.lng,
+          },
+          checkInTime: FieldValue.serverTimestamp(),
+          discoverExpiryTime: Timestamp.fromDate(
+            new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 days
+          ),
+          totalCheckIns: totalCheckIns,
+          isInitialRegistration: false,
+          isBot: true,
+        });
+
+        // Add to check_in_history for discover system (30 days)
+        await db.collection('check_in_history').add({
+          userId: botId,
+          userName: userName,
+          userPhoto: userPhoto,
+          isPremium: isPremium,
+          venueId: placeId,
+          venueName: place.name,
+          venueCategory: (place.types && place.types[0]) || 'restaurant',
+          venueLocation: {
+            latitude: place.geometry.location.lat,
+            longitude: place.geometry.location.lng,
+          },
+          checkInTime: FieldValue.serverTimestamp(),
+          originalCheckInId: checkInRef.id,
+          forDiscoverMatching: true,
+          expiresAt: Timestamp.fromDate(
+            new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+          ),
+          totalCheckIns: totalCheckIns,
+          isBot: true,
+        });
+
+        // Update user document
+        const userRef = db.collection('users').doc(botId);
+        await userRef.update({
+          favoriteVenues: FieldValue.arrayUnion(place.name),
+          favoriteVenueDetails: FieldValue.arrayUnion(venueDetail),
+          venueCount: FieldValue.increment(1),
+          totalCheckIns: FieldValue.increment(1),
+        });
+
+        // Update or create user_stats
+        await db.collection('user_stats').doc(botId).set({
+          totalCheckIns: FieldValue.increment(1),
+          totalVenueVisits: FieldValue.increment(1),
+        }, { merge: true });
+
+        // Create feed post (matching Flutter app)
+        await db.collection('feed_posts').add({
+          userId: botId,
+          userName: userName,
+          userAge: botUserData.age || 25,
+          userProfileImage: userPhoto,
+          venueName: place.name,
+          venueAddress: place.vicinity || place.formatted_address || '',
+          venueCategory: (place.types && place.types[0]) || 'restaurant',
+          venueId: placeId,
+          checkInTime: FieldValue.serverTimestamp(),
+          postImage: null, // Fotoğrafsız check-in
+          caption: null,
+          likeCount: 0,
+          commentCount: 0,
+          likedBy: [],
+          latitude: place.geometry.location.lat,
+          longitude: place.geometry.location.lng,
+          type: 'check_in',
+          isBot: true,
+        });
+
+        console.log(`✅ Bot ${botId} check-in yaptı: ${place.name}`);
+        res.status(200).json({ 
+          success: true, 
+          checkInId: checkInRef.id,
+          placeName: place.name,
+          message: `${place.name} mekanına check-in yapıldı`
+        });
+      } catch (error) {
+        console.error('botPerformCheckIn hata:', error && error.message ? error.message : error);
+        res.status(500).json({ success: false, error: error.message || 'Check-in başarısız' });
+      }
+    });
+  }
+);
+
+// Bot hesabı oluşturma fonksiyonu
+exports.createBotAccount = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const data = req.body.data || req.body;
+        
+        console.log("🤖 Bot hesabı oluşturuluyor...");
+        
+        // Gerekli alanları kontrol et
+        if (!data.email || !data.name || !data.surname || !data.age || !data.gender) {
+          throw new Error("Eksik zorunlu alanlar");
+        }
+      
+      // Rastgele şifre oluştur
+      const password = "Bot" + Math.random().toString(36).slice(-10) + "!";
+      
+      // Firebase Authentication ile kullanıcı oluştur (Admin SDK)
+      const userRecord = await getAuth().createUser({
+        email: data.email,
+        password: password,
+        emailVerified: data.isEmailVerified || false,
+        disabled: false,
+      });
+      
+      console.log(`✅ Auth kullanıcısı oluşturuldu: ${userRecord.uid}`);
+      
+      // Cinsiyet tercihleri (Keşfet için - genderPreferences)
+      let genderPreferences = [];
+      if (data.gender === "Erkek") {
+        genderPreferences = ["Kadın"];
+      } else if (data.gender === "Kadın") {
+        genderPreferences = ["Erkek"];
+      } else {
+        genderPreferences = ["Erkek", "Kadın", "Diğer"];
+      }
+      
+      // Firestore'a bot profilini kaydet
+      const botData = {
+        // Temel bilgiler
+        uid: userRecord.uid,
+        email: data.email,
+        name: data.name,
+        surname: data.surname,
+        fullName: `${data.name} ${data.surname}`,
+        age: data.age,
+        gender: data.gender,
+        
+        // Fotoğraflar
+        photos: data.photos || [],
+        mainPhoto: data.photos && data.photos[0] ? data.photos[0] : "",
+        photoCount: data.photos ? data.photos.length : 0,
+        
+        // Hobiler
+        hobbies: data.hobbies || [],
+        hobbyCount: data.hobbies ? data.hobbies.length : 0,
+        
+        // Konum
+        city: data.city || "İzmir",
+        
+        // Favori mekanlar (boş başlat, sonra check-in yapılacak)
+        favoriteVenues: [],
+        favoriteVenueDetails: [],
+        venueCount: 0,
+        
+        // İletişim
+        phone: data.phone || "",
+        isEmailVerified: data.isEmailVerified || false,
+        isPhoneVerified: data.isPhoneVerified || false,
+        
+        // Cinsiyet tercihleri (Keşfet sayfasında kimleri görecek)
+        genderPreferences: genderPreferences,
+        
+        // Eşleşme ayarları
+        agePreferences: {minAge: 18, maxAge: 55},
+        maxDistance: 50,
+        showMe: true,
+        
+        // Profil durumu
+        isProfileComplete: true,
+        profileCompletedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        lastActive: FieldValue.serverTimestamp(),
+        completionProgress: 1.0,
+        
+        // Premium ve limitler
+        isPremium: data.isPremium || false,
+        premiumUntil: data.isPremium ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() : null,
+        dailyLikesRemaining: data.isPremium ? 999 : 5,
+        superLikesRemaining: data.isPremium ? 999 : 0,
+        dailyRewindsRemaining: data.isPremium ? 999 : 0,
+        
+        // Bot işareti
+        isBot: true,
+        botCreatedAt: FieldValue.serverTimestamp(),
+        botPassword: password,
+        
+        // İstatistikler
+        totalLikes: 0,
+        totalMatches: 0,
+        totalCheckIns: 0,
+        profileViews: 0,
+        
+        // Ayarlar (profile_settings_page.dart ile uyumlu)
+        mapVisibility: true,
+        profileActive: true,
+        notifications: false,
+        matchNotifications: false,
+        messageNotifications: false,
+        
+        // Diğer
+        badges: [],
+        achievements: [],
+        blockedUsers: [],
+        reportCount: 0,
+        isReported: false,
+        isBanned: false,
+        platform: "web_bot",
+        appVersion: "1.0.0",
+      };
+      
+      await getFirestore().collection("users").doc(userRecord.uid).set(botData);
+      
+      console.log(`✅ Firestore profil oluşturuldu: ${userRecord.uid}`);
+      
+      // User stats oluştur
+      await getFirestore().collection("user_stats").doc(userRecord.uid).set({
+        userId: userRecord.uid,
+        totalLikesGiven: 0,
+        totalLikesReceived: 0,
+        totalMatches: 0,
+        totalMessages: 0,
+        totalCheckIns: 0,
+        totalVenueVisits: 0,
+        joinedAt: FieldValue.serverTimestamp(),
+      });
+      
+      console.log(`✅ Bot hesabı başarıyla oluşturuldu: ${data.email}`);
+      
+      res.status(200).json({
+        success: true,
+        uid: userRecord.uid,
+        email: data.email,
+        password: password,
+        message: "Bot hesabı başarıyla oluşturuldu",
+      });
+      
+    } catch (error) {
+      console.error("❌ Bot oluşturma hatası:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Bot hesabı oluşturulamadı",
+      });
+    }
+    });
+  }
+);
+
+// Bot listesini getirme fonksiyonu
+exports.getBotList = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        console.log("📋 Bot listesi istendi");
+        
+        const botsSnapshot = await getFirestore()
+          .collection("users")
+          .where("isBot", "==", true)
+          .get();
+        
+        const bots = [];
+        botsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          bots.push({
+            uid: doc.id,
+            email: data.email,
+            fullName: data.fullName,
+            age: data.age,
+            gender: data.gender,
+            city: data.city,
+            hobbies: data.hobbies || [],
+            photos: data.photos || [],
+            photoCount: data.photoCount || 0,
+            totalCheckIns: data.totalCheckIns || 0,
+            totalLikes: data.totalLikes || 0,
+            totalMatches: data.totalMatches || 0,
+            isPremium: data.isPremium || false,
+            isEmailVerified: data.isEmailVerified || false,
+            isPhoneVerified: data.isPhoneVerified || false,
+            genderPreferences: data.genderPreferences || [],
+            botPassword: data.botPassword || "",
+            createdAt: data.createdAt,
+          });
+        });
+        
+        console.log(`✅ ${bots.length} bot bulundu`);
+        
+        res.status(200).json({
+          success: true,
+          bots: bots,
+          count: bots.length,
+        });
+        
+      } catch (error) {
+        console.error("❌ Bot listesi hatası:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message || "Bot listesi alınamadı",
+        });
+      }
+    });
+  }
+);
+
+// Bot istatistiklerini getirme fonksiyonu
+exports.getBotStats = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        console.log("📊 Bot istatistikleri istendi");
+        
+        const botsSnapshot = await getFirestore()
+          .collection("users")
+          .where("isBot", "==", true)
+          .get();
+        
+        let totalBots = 0;
+        let totalCheckIns = 0;
+        let totalLikes = 0;
+        let totalMatches = 0;
+        let premiumBots = 0;
+        
+        botsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          totalBots++;
+          totalCheckIns += data.totalCheckIns || 0;
+          totalLikes += data.totalLikes || 0;
+          totalMatches += data.totalMatches || 0;
+          if (data.isPremium) premiumBots++;
+        });
+        
+        console.log(`✅ İstatistikler hesaplandı: ${totalBots} bot`);
+        
+        res.status(200).json({
+          success: true,
+          stats: {
+            totalBots,
+            totalCheckIns,
+            totalLikes,
+            totalMatches,
+            premiumBots,
+          },
+        });
+        
+      } catch (error) {
+        console.error("❌ İstatistik hatası:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message || "İstatistikler alınamadı",
+        });
+      }
+    });
+  }
+);
+
+// Bot silme fonksiyonu
+// Bot silme fonksiyonu
+exports.deleteBot = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const data = req.body.data || req.body;
+        const {botId} = data;
+        
+        console.log(`🗑️ Bot siliniyor: ${botId}`);
+        
+        if (!botId) {
+          throw new Error("Bot ID gerekli");
+        }
+        
+        // Auth user'ı sil
+        try {
+          await getAuth().deleteUser(botId);
+          console.log(`✅ Auth kullanıcısı silindi: ${botId}`);
+        } catch (authError) {
+          console.warn(`⚠️ Auth silme hatası (devam ediliyor): ${authError.message}`);
+        }
+        
+        // Firestore user'ı sil
+        await getFirestore().collection("users").doc(botId).delete();
+        console.log(`✅ Firestore kullanıcısı silindi: ${botId}`);
+        
+        // User stats'ı sil
+        try {
+          await getFirestore().collection("user_stats").doc(botId).delete();
+        } catch (statsError) {
+          console.warn(`⚠️ Stats silme hatası (devam ediliyor): ${statsError.message}`);
+        }
+        
+        res.status(200).json({
+          success: true,
+          message: "Bot başarıyla silindi",
+        });
+        
+      } catch (error) {
+        console.error("❌ Bot silme hatası:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message || "Bot silinemedi",
+        });
+      }
+    });
+  }
+);
+
+// Bot mesaj gönderme fonksiyonu
+exports.botSendMessage = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const {botId, targetUserId, message, isSuperMessage} = req.body;
+        
+        console.log(`� Bot mesaj gönderiyor: ${botId} -> ${targetUserId} (Super: ${isSuperMessage})`);
+        
+        if (!botId || !targetUserId || !message) {
+          throw new Error("Bot ID, Target User ID ve mesaj gerekli");
+        }
+        
+        // Bot kontrolü
+        const botDoc = await getFirestore().collection("users").doc(botId).get();
+        if (!botDoc.exists || !botDoc.data().isBot) {
+          throw new Error("Geçersiz bot ID");
+        }
+        
+        // Hedef kullanıcı kontrolü
+        const targetDoc = await getFirestore().collection("users").doc(targetUserId).get();
+        if (!targetDoc.exists) {
+          throw new Error("Hedef kullanıcı bulunamadı");
+        }
+        
+        // Sohbet ID'si oluştur (küçük UID önce)
+        const chatId = [botId, targetUserId].sort().join("_");
+        
+        // Sohbet var mı kontrol et, yoksa oluştur
+        const chatRef = getFirestore().collection("chats").doc(chatId);
+        const chatDoc = await chatRef.get();
+        
+        if (!chatDoc.exists) {
+          // Yeni sohbet oluştur
+          await chatRef.set({
+            participants: [botId, targetUserId],
+            participantDetails: {
+              [botId]: {
+                uid: botId,
+                name: botDoc.data().name,
+                surname: botDoc.data().surname,
+                mainPhoto: botDoc.data().mainPhoto || "",
+              },
+              [targetUserId]: {
+                uid: targetUserId,
+                name: targetDoc.data().name,
+                surname: targetDoc.data().surname,
+                mainPhoto: targetDoc.data().mainPhoto || "",
+              },
+            },
+            lastMessage: message,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            lastMessageSenderId: botId,
+            createdAt: FieldValue.serverTimestamp(),
+            unreadCount: {
+              [botId]: 0,
+              [targetUserId]: 1,
+            },
+          });
+        } else {
+          // Mevcut sohbeti güncelle
+          const chatData = chatDoc.data();
+          const currentUnreadCount = chatData.unreadCount && chatData.unreadCount[targetUserId] ? chatData.unreadCount[targetUserId] : 0;
+          
+          const updateData = {
+            lastMessage: message,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            lastMessageSenderId: botId,
+          };
+          updateData["unreadCount." + targetUserId] = currentUnreadCount + 1;
+          
+          await chatRef.update(updateData);
+        }
+        
+        // Mesajı oluştur
+        const messageData = {
+          chatId: chatId,
+          senderId: botId,
+          receiverId: targetUserId,
+          message: message,
+          timestamp: FieldValue.serverTimestamp(),
+          isRead: false,
+          isSuperMessage: isSuperMessage || false,
+          messageType: "text",
+        };
+        
+        const messageRef = await getFirestore()
+          .collection("chats")
+          .doc(chatId)
+          .collection("messages")
+          .add(messageData);
+        
+        // Bildirim oluştur
+        await getFirestore().collection("notification_requests").add({
+          userId: targetUserId,
+          type: isSuperMessage ? "super_message" : "message",
+          title: isSuperMessage ? `⭐ ${botDoc.data().fullName}` : botDoc.data().fullName,
+          body: message,
+          data: {
+            chatId: chatId,
+            senderId: botId,
+            messageId: messageRef.id,
+          },
+          createdAt: FieldValue.serverTimestamp(),
+          status: "pending",
+        });
+        
+        // Bot istatistiklerini güncelle
+        await getFirestore().collection("users").doc(botId).update({
+          totalMessages: (botDoc.data().totalMessages || 0) + 1,
+        });
+        
+        console.log(`✅ Bot mesaj gönderildi: ${messageRef.id}`);
+        
+        res.status(200).json({
+          success: true,
+          messageId: messageRef.id,
+          chatId: chatId,
+          message: isSuperMessage ? "Süper mesaj başarıyla gönderildi" : "Mesaj başarıyla gönderildi",
+        });
+        
+      } catch (error) {
+        console.error("❌ Bot mesaj hatası:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message || "Mesaj gönderilemedi",
+        });
+      }
+    });
+  }
+);
+// Bot mesaj isteği gönderme fonksiyonu (Chat Request System)
+exports.botSendMessageRequest = onRequest(
+  {
+    region: "us-central1",
+  },
+  async (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const {botId, targetUserId, message, isSuperMessage} = req.body;
+        
+        console.log("Bot mesaj isteği gönderiyor:", botId, "->", targetUserId, "Super:", isSuperMessage);
+        
+        if (!botId || !targetUserId) {
+          throw new Error("Bot ID ve Target User ID gerekli");
+        }
+        
+        if (!message || message.trim().length === 0) {
+          throw new Error("Mesaj içeriği gerekli");
+        }
+        
+        if (message.trim().length > 20) {
+          throw new Error("Mesaj en fazla 20 karakter olabilir");
+        }
+        
+        const botDoc = await getFirestore().collection("users").doc(botId).get();
+        if (!botDoc.exists || !botDoc.data().isBot) {
+          throw new Error("Geçersiz bot ID");
+        }
+        
+        const targetDoc = await getFirestore().collection("users").doc(targetUserId).get();
+        if (!targetDoc.exists) {
+          throw new Error("Hedef kullanıcı bulunamadı");
+        }
+        
+        const existingRequest = await getFirestore()
+          .collection("chat_requests")
+          .where("fromUserId", "==", botId)
+          .where("toUserId", "==", targetUserId)
+          .where("status", "==", "pending")
+          .get();
+        
+        if (!existingRequest.empty) {
+          throw new Error("Bu kullanıcıya zaten mesaj isteği gönderilmiş");
+        }
+        
+        const matchesSnapshot = await getFirestore()
+          .collection("matches")
+          .where("users", "array-contains", botId)
+          .get();
+        
+        let alreadyMatched = false;
+        for (const doc of matchesSnapshot.docs) {
+          const users = doc.data().users || [];
+          if (users.includes(targetUserId)) {
+            alreadyMatched = true;
+            break;
+          }
+        }
+        
+        if (alreadyMatched) {
+          throw new Error("Bu kullanıcıyla zaten eşleşmiş");
+        }
+        
+        const requestData = {
+          fromUserId: botId,
+          toUserId: targetUserId,
+          type: isSuperMessage ? "superChat" : "normal",
+          status: "pending",
+          message: message.trim(),
+          timestamp: FieldValue.serverTimestamp(),
+          expiresAt: FieldValue.serverTimestamp(),
+          respondedAt: null,
+        };
+        
+        const requestRef = await getFirestore().collection("chat_requests").add(requestData);
+        
+        await getFirestore().collection("notification_requests").add({
+          userId: targetUserId,
+          type: isSuperMessage ? "super_chat_request" : "chat_request",
+          title: isSuperMessage ? "⭐ " + botDoc.data().fullName : botDoc.data().fullName,
+          body: isSuperMessage ? "Süper mesaj: " + message : "Sana mesaj isteği gönderdi",
+          data: {
+            requestId: requestRef.id,
+            fromUserId: botId,
+            type: "chat_request",
+          },
+          createdAt: FieldValue.serverTimestamp(),
+          status: "pending",
+        });
+        
+        console.log("Bot mesaj isteği gönderildi:", requestRef.id);
+        
+        res.status(200).json({
+          success: true,
+          requestId: requestRef.id,
+          message: isSuperMessage ? "Süper mesaj isteği başarıyla gönderildi" : "Mesaj isteği başarıyla gönderildi",
+        });
+        
+      } catch (error) {
+        console.error("Bot mesaj isteği hatası:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message || "Mesaj isteği gönderilemedi",
+        });
+      }
+    });
+  }
+);
+
+// 🛡️ GOOGLE PLAY PURCHASE VERIFICATION - Sunucu taraflı satın alma doğrulaması
+exports.verifyGooglePlayPurchase = onCall(
+  {
+    region: "us-central1",
+    enforceAppCheck: false,
+    secrets: [googleServiceAccountKey],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Kimlik doğrulama gerekli");
+    }
+
+    const {purchaseToken, productId, purchaseType} = request.data;
+
+    if (!purchaseToken || !productId || !purchaseType) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "purchaseToken, productId ve purchaseType gerekli"
+      );
+    }
+
+    if (purchaseType !== "product" && purchaseType !== "subscription") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "purchaseType 'product' veya 'subscription' olmalı"
+      );
+    }
+
+    const packageName = "com.lovenme.app";
+    const userId = request.auth.uid;
+
+    console.log(`🛡️ Purchase doğrulama başlatıldı: userId=${userId}, productId=${productId}, type=${purchaseType}`);
+
+    try {
+      // Service account JSON'unu secret'tan oku
+      const serviceAccountJson = JSON.parse(googleServiceAccountKey.value());
+
+      // Google Play Developer API için kimlik doğrulama
+      const auth = new GoogleAuth({
+        credentials: serviceAccountJson,
+        scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+      });
+      const client = await auth.getClient();
+      const tokenResponse = await client.getAccessToken();
+      const accessToken = tokenResponse.token;
+
+      let apiUrl;
+      if (purchaseType === "subscription") {
+        apiUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`;
+      } else {
+        apiUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/products/${productId}/tokens/${purchaseToken}`;
+      }
+
+      const response = await axios.get(apiUrl, {
+        headers: {Authorization: `Bearer ${accessToken}`},
+      });
+
+      const data = response.data;
+      let isValid = false;
+      let reason = "";
+
+      if (purchaseType === "subscription") {
+        // paymentState: 1 = ödendi, 2 = ücretsiz deneme
+        isValid = data.paymentState === 1 || data.paymentState === 2;
+        reason = isValid ? "Abonelik doğrulandı" : `Geçersiz ödeme durumu: ${data.paymentState}`;
+      } else {
+        // purchaseState: 0 = satın alındı, 4 = önceden onaylandı
+        isValid = data.purchaseState === 0 || data.purchaseState === 4;
+        reason = isValid ? "Satın alma doğrulandı" : `Geçersiz satın alma durumu: ${data.purchaseState}`;
+      }
+
+      // Doğrulama sonucunu Firestore'a logla
+      await getFirestore().collection("purchase_verifications").add({
+        userId: userId,
+        productId: productId,
+        purchaseType: purchaseType,
+        isValid: isValid,
+        reason: reason,
+        purchaseToken: purchaseToken.substring(0, 20) + "...", // Güvenlik için token'ı kısalt
+        verifiedAt: FieldValue.serverTimestamp(),
+        rawData: {
+          purchaseState: data.purchaseState !== undefined ? data.purchaseState : null,
+          paymentState: data.paymentState !== undefined ? data.paymentState : null,
+          orderId: data.orderId !== undefined ? data.orderId : null,
+        },
+      });
+
+      console.log(`✅ Purchase doğrulama tamamlandı: userId=${userId}, isValid=${isValid}, reason=${reason}`);
+
+      return {valid: isValid, reason, productId, purchaseType};
+    } catch (error) {
+      const statusCode = error.response ? error.response.status : null;
+      const errorMessage = error.response
+        ? JSON.stringify(error.response.data)
+        : error.message;
+
+      console.error(`❌ Purchase doğrulama hatası: userId=${userId}, productId=${productId}`, errorMessage);
+
+      // 404 = Token geçersiz veya zaten tüketilmiş
+      if (statusCode === 404) {
+        return {valid: false, reason: "Satın alma token'ı bulunamadı veya geçersiz"};
+      }
+
+      // 410 = Token zaten kullanılmış (consumable için normal)
+      // ✅ FIX: Consumable ürünler acknowledge edildikten sonra 410 döner — bu meşru
+      if (statusCode === 410) {
+        if (purchaseType === "product") {
+          console.log(`ℹ️ Consumable token 410 (acknowledged) — valid kabul ediliyor: ${productId}`);
+          return {valid: true, reason: "Consumable satın alma zaten onaylanmış (410)"};
+        }
+        return {valid: false, reason: "Satın alma token'ı zaten kullanılmış"};
+      }
+
+      throw new functions.https.HttpsError(
+        "internal",
+        `Doğrulama başarısız: ${errorMessage}`
+      );
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔔 GOOGLE PLAY REAL-TIME DEVELOPER NOTIFICATIONS (RTDN)
+// ─────────────────────────────────────────────────────────────────────────────
+// Google Play Pub/Sub'dan gelen iade/iptal/subscription değişiklik bildirimleri.
+// Cloud Console'da yapılması gerekenler:
+//   1. Pub/Sub topic oluştur: "play-rtdn"
+//   2. Google Play Console > Monetization > Monetization setup > Real-time developer notifications
+//      Topic name: projects/<PROJECT_ID>/topics/play-rtdn
+//   3. Bu Cloud Function'ın URL'sini Pub/Sub push subscription olarak ekle
+//      VEYA Pub/Sub pull subscription kullan (aşağıdaki onRequest handler push için)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.handlePlayRTDN = onRequest(
+  {
+    region: "us-central1",
+    secrets: [googleServiceAccountKey],
+  },
+  async (req, res) => {
+    // Sadece POST kabul et
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+
+    try {
+      // Pub/Sub mesajını decode et
+      const message = req.body.message;
+      if (!message || !message.data) {
+        console.warn("⚠️ RTDN: Geçersiz Pub/Sub mesajı");
+        res.status(400).send("Invalid message");
+        return;
+      }
+
+      const dataStr = Buffer.from(message.data, "base64").toString("utf-8");
+      const notification = JSON.parse(dataStr);
+      const packageName = notification.packageName || "";
+
+      console.log(`🔔 RTDN alındı: package=${packageName}`, JSON.stringify(notification));
+
+      // com.lovenme.app kontrolü
+      if (packageName !== "com.lovenme.app") {
+        console.warn(`⚠️ RTDN: Farklı paket adı: ${packageName}`);
+        res.status(200).send("OK (ignored)");
+        return;
+      }
+
+      const db = getFirestore();
+
+      // RTDN log kaydet
+      await db.collection("rtdn_notifications").add({
+        notification: notification,
+        receivedAt: FieldValue.serverTimestamp(),
+        processed: false,
+      });
+
+      // ───── SUBSCRIPTION BİLDİRİMİ ─────
+      if (notification.subscriptionNotification) {
+        const subNotif = notification.subscriptionNotification;
+        const notificationType = subNotif.notificationType;
+        const purchaseToken = subNotif.purchaseToken;
+        const subscriptionId = subNotif.subscriptionId;
+
+        console.log(`📋 Subscription RTDN: type=${notificationType}, product=${subscriptionId}`);
+
+        // notificationType değerleri:
+        // 1 = SUBSCRIPTION_RECOVERED (ödeme kurtarıldı)
+        // 2 = SUBSCRIPTION_RENEWED (yenilendi)
+        // 3 = SUBSCRIPTION_CANCELED (iptal edildi — dönem sonunda biter)
+        // 4 = SUBSCRIPTION_PURCHASED (yeni satın alma)
+        // 5 = SUBSCRIPTION_ON_HOLD (ödeme beklemede)
+        // 6 = SUBSCRIPTION_IN_GRACE_PERIOD (grace period)
+        // 7 = SUBSCRIPTION_RESTARTED (yeniden başlatıldı)
+        // 12 = SUBSCRIPTION_REVOKED (iade — hemen iptal)
+        // 13 = SUBSCRIPTION_EXPIRED (süresi doldu)
+
+        // İade (REVOKED) — en kritik: premium hemen geri alınmalı
+        if (notificationType === 12) {
+          console.log(`💸 SUBSCRIPTION REVOKED (iade): token=${purchaseToken ? purchaseToken.substring(0, 20) : "N/A"}...`);
+          await _handleSubscriptionRevoked(db, purchaseToken, subscriptionId);
+        }
+
+        // Süresi doldu (EXPIRED)
+        if (notificationType === 13) {
+          console.log(`⏰ SUBSCRIPTION EXPIRED: token=${purchaseToken ? purchaseToken.substring(0, 20) : "N/A"}...`);
+          await _handleSubscriptionExpired(db, purchaseToken, subscriptionId);
+        }
+
+        // İptal edildi (ama dönem sonuna kadar aktif kalır)
+        if (notificationType === 3) {
+          console.log(`🚫 SUBSCRIPTION CANCELED: token=${purchaseToken ? purchaseToken.substring(0, 20) : "N/A"}...`);
+          await _handleSubscriptionCanceled(db, purchaseToken, subscriptionId);
+        }
+
+        // Yenilendi
+        if (notificationType === 2) {
+          console.log(`🔄 SUBSCRIPTION RENEWED: token=${purchaseToken ? purchaseToken.substring(0, 20) : "N/A"}...`);
+          await _handleSubscriptionRenewed(db, purchaseToken, subscriptionId);
+        }
+      }
+
+      // ───── ONE-TIME PRODUCT (CONSUMABLE) BİLDİRİMİ ─────
+      if (notification.oneTimeProductNotification) {
+        const otpNotif = notification.oneTimeProductNotification;
+        const notificationType = otpNotif.notificationType;
+        const purchaseToken = otpNotif.purchaseToken;
+        const sku = otpNotif.sku;
+
+        console.log(`📋 OneTimeProduct RTDN: type=${notificationType}, sku=${sku}`);
+
+        // notificationType:
+        // 1 = ONE_TIME_PRODUCT_PURCHASED
+        // 2 = ONE_TIME_PRODUCT_CANCELED (iade)
+        if (notificationType === 2) {
+          console.log(`💸 CONSUMABLE REFUNDED: sku=${sku}, token=${purchaseToken ? purchaseToken.substring(0, 20) : "N/A"}...`);
+          await _handleConsumableRefund(db, purchaseToken, sku);
+        }
+      }
+
+      // ───── VOIDED PURCHASE BİLDİRİMİ ─────
+      if (notification.voidedPurchaseNotification) {
+        const vpNotif = notification.voidedPurchaseNotification;
+        console.log(`💸 VOIDED PURCHASE: orderId=${vpNotif.orderId}`);
+        await _handleVoidedPurchase(db, vpNotif);
+      }
+
+      // İşlendiğini işaretle
+      const rtdnDocs = await db.collection("rtdn_notifications")
+        .where("processed", "==", false)
+        .orderBy("receivedAt", "desc")
+        .limit(1)
+        .get();
+      if (!rtdnDocs.empty) {
+        await rtdnDocs.docs[0].ref.update({processed: true});
+      }
+
+      res.status(200).send("OK");
+    } catch (error) {
+      console.error("❌ RTDN işleme hatası:", error);
+      // Yine de 200 dön, yoksa Pub/Sub tekrar tekrar gönderir
+      res.status(200).send("OK (error logged)");
+    }
+  }
+);
+
+// ─────── RTDN YARDIMCI FONKSİYONLAR ───────
+
+// 🔍 Purchase token'dan userId'yi bul
+async function _findUserByPurchaseToken(db, purchaseToken) {
+  // purchases collection'da token ara
+  const shortToken = purchaseToken ? purchaseToken.substring(0, 20) + "..." : "";
+
+  // Önce purchase_verifications'da ara (tam token kısaltılmış hali saklanıyor)
+  // Ama asıl purchases collection'da verificationData alanında token saklanabilir
+  const purchasesSnap = await db.collection("purchases")
+    .where("verificationData", "==", purchaseToken)
+    .limit(1)
+    .get();
+
+  if (!purchasesSnap.empty) {
+    return purchasesSnap.docs[0].data().userId;
+  }
+
+  // purchase_verifications'da ara (kısaltılmış token saklanıyor, tam eşleşme olmaz)
+  // Fallback: Son 24 saatteki tüm doğrulamaları kontrol et
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const verSnap = await db.collection("purchase_verifications")
+    .where("verifiedAt", ">=", oneDayAgo)
+    .orderBy("verifiedAt", "desc")
+    .limit(100)
+    .get();
+
+  for (const doc of verSnap.docs) {
+    const data = doc.data();
+    // token ilk 20 karakter + "..." olarak saklandı
+    if (purchaseToken && data.purchaseToken === shortToken) {
+      return data.userId;
+    }
+  }
+
+  console.warn(`⚠️ Token ile userId bulunamadı: ${shortToken}`);
+  return null;
+}
+
+// 💸 Subscription iade (REVOKED) — premium hemen geri al
+async function _handleSubscriptionRevoked(db, purchaseToken, subscriptionId) {
+  try {
+    const userId = await _findUserByPurchaseToken(db, purchaseToken);
+    if (!userId) {
+      console.error("❌ REVOKED: userId bulunamadı — manual review gerekiyor");
+      await _logRefundEvent(db, "subscription_revoked_no_user", null, subscriptionId, purchaseToken);
+      return;
+    }
+
+    console.log(`💸 Premium geri alınıyor: userId=${userId}, product=${subscriptionId}`);
+
+    // Premium'u hemen kapat
+    await db.collection("users").doc(userId).update({
+      isPremium: false,
+      premiumType: null,
+      premiumUntil: null,
+      dailyChatRequestsRemaining: 5,
+      premiumRevokedAt: FieldValue.serverTimestamp(),
+      premiumRevokeReason: "google_play_refund",
+    });
+
+    // Purchase kaydını güncelle
+    await _markPurchasesRefunded(db, userId, subscriptionId);
+
+    // Log
+    await _logRefundEvent(db, "subscription_revoked", userId, subscriptionId, purchaseToken);
+
+    console.log(`✅ Premium geri alındı: userId=${userId}`);
+  } catch (error) {
+    console.error("❌ _handleSubscriptionRevoked hatası:", error);
+  }
+}
+
+// ⏰ Subscription süresi doldu (EXPIRED)
+// eslint-disable-next-line no-unused-vars
+async function _handleSubscriptionExpired(db, purchaseToken, subscriptionId) {
+  try {
+    const userId = await _findUserByPurchaseToken(db, purchaseToken);
+    if (!userId) return;
+
+    // checkPremiumStatus zaten saat başı kontrol ediyor,
+    // ama RTDN ile anında da kapatmak daha iyi
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) return;
+
+    const userData = userDoc.data();
+    if (userData.isPremium) {
+      await db.collection("users").doc(userId).update({
+        isPremium: false,
+        premiumType: null,
+        premiumUntil: null,
+        dailyChatRequestsRemaining: 5,
+        premiumExpiredAt: FieldValue.serverTimestamp(),
+      });
+      console.log(`⏰ Premium expired via RTDN: userId=${userId}`);
+    }
+  } catch (error) {
+    console.error("❌ _handleSubscriptionExpired hatası:", error);
+  }
+}
+
+// 🚫 Subscription iptal edildi (dönem sonuna kadar aktif kalır)
+async function _handleSubscriptionCanceled(db, purchaseToken, subscriptionId) {
+  try {
+    const userId = await _findUserByPurchaseToken(db, purchaseToken);
+    if (!userId) return;
+
+    // Sadece iptal durumunu logla — premium dönem sonuna kadar aktif kalır
+    await db.collection("users").doc(userId).update({
+      subscriptionCanceledAt: FieldValue.serverTimestamp(),
+      subscriptionAutoRenew: false,
+    });
+
+    await _logRefundEvent(db, "subscription_canceled", userId, subscriptionId, purchaseToken);
+    console.log(`🚫 Subscription iptal kaydedildi (dönem sonuna kadar aktif): userId=${userId}`);
+  } catch (error) {
+    console.error("❌ _handleSubscriptionCanceled hatası:", error);
+  }
+}
+
+// 🔄 Subscription yenilendi
+// eslint-disable-next-line no-unused-vars
+async function _handleSubscriptionRenewed(db, purchaseToken, subscriptionId) {
+  try {
+    const userId = await _findUserByPurchaseToken(db, purchaseToken);
+    if (!userId) return;
+
+    // Yenileme logla
+    await db.collection("users").doc(userId).update({
+      subscriptionAutoRenew: true,
+      subscriptionRenewedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`🔄 Subscription yenilendi: userId=${userId}`);
+  } catch (error) {
+    console.error("❌ _handleSubscriptionRenewed hatası:", error);
+  }
+}
+
+// 💸 Consumable iade (elmas / super chat)
+async function _handleConsumableRefund(db, purchaseToken, sku) {
+  try {
+    const userId = await _findUserByPurchaseToken(db, purchaseToken);
+    if (!userId) {
+      console.error("❌ CONSUMABLE REFUND: userId bulunamadı — manual review gerekiyor");
+      await _logRefundEvent(db, "consumable_refund_no_user", null, sku, purchaseToken);
+      return;
+    }
+
+    console.log(`💸 Consumable iade işleniyor: userId=${userId}, sku=${sku}`);
+
+    // SKU'dan miktar ve tip belirle
+    const refundInfo = _getRefundInfoFromSku(sku);
+    if (!refundInfo) {
+      console.error(`❌ Bilinmeyen SKU: ${sku}`);
+      await _logRefundEvent(db, "consumable_refund_unknown_sku", userId, sku, purchaseToken);
+      return;
+    }
+
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) return;
+    const userData = userDoc.data();
+
+    // Benefit geri al
+    const updates = {updatedAt: FieldValue.serverTimestamp()};
+
+    if (refundInfo.type === "diamonds") {
+      const currentDiamonds = userData.diamonds || 0;
+      // Negatife düşmesin
+      const newBalance = Math.max(0, currentDiamonds - refundInfo.quantity);
+      updates.diamonds = newBalance;
+      updates.diamondCount = newBalance;
+      console.log(`💎 Elmas geri alındı: ${refundInfo.quantity} (${currentDiamonds} → ${newBalance})`);
+    } else if (refundInfo.type === "superChats") {
+      const currentSC = userData.superChatsRemaining || 0;
+      const newBalance = Math.max(0, currentSC - refundInfo.quantity);
+      updates.superChatsRemaining = newBalance;
+      console.log(`💬 Super Chat geri alındı: ${refundInfo.quantity} (${currentSC} → ${newBalance})`);
+    }
+
+    await db.collection("users").doc(userId).update(updates);
+
+    // Purchase kaydını güncelle
+    await _markPurchasesRefunded(db, userId, sku);
+
+    // Log
+    await _logRefundEvent(db, "consumable_refunded", userId, sku, purchaseToken);
+
+    console.log(`✅ Consumable iade tamamlandı: userId=${userId}, sku=${sku}`);
+  } catch (error) {
+    console.error("❌ _handleConsumableRefund hatası:", error);
+  }
+}
+
+// 💸 Voided Purchase (Google Play iade/chargeback)
+async function _handleVoidedPurchase(db, vpNotif) {
+  try {
+    const orderId = vpNotif.orderId;
+    const productType = vpNotif.productType; // 0 = subscription, 1 = one-time
+
+    // orderId ile purchase kaydını bul
+    const purchaseSnap = await db.collection("purchases")
+      .where("orderId", "==", orderId)
+      .limit(1)
+      .get();
+
+    if (purchaseSnap.empty) {
+      // purchase_verifications'da da ara
+      const verSnap = await db.collection("purchase_verifications")
+        .where("rawData.orderId", "==", orderId)
+        .limit(1)
+        .get();
+
+      if (!verSnap.empty) {
+        const userId = verSnap.docs[0].data().userId;
+        const productId = verSnap.docs[0].data().productId;
+        await _logRefundEvent(db, "voided_purchase", userId, productId, orderId);
+        console.log(`💸 Voided purchase logged: orderId=${orderId}, userId=${userId}`);
+      } else {
+        await _logRefundEvent(db, "voided_purchase_no_match", null, null, orderId);
+      }
+      return;
+    }
+
+    const purchaseData = purchaseSnap.docs[0].data();
+    const userId = purchaseData.userId;
+    const productId = purchaseData.productId;
+
+    // Benefit geri al
+    if (productType === 0) {
+      // Subscription iade
+      await _handleSubscriptionRevoked(db, null, productId);
+    } else {
+      // Consumable iade
+      await _handleConsumableRefund(db, null, productId);
+    }
+
+    await _logRefundEvent(db, "voided_purchase_processed", userId, productId, orderId);
+  } catch (error) {
+    console.error("❌ _handleVoidedPurchase hatası:", error);
+  }
+}
+
+// 📝 SKU'dan iade bilgisi çıkar
+function _getRefundInfoFromSku(sku) {
+  const skuMap = {
+    "com.lovenme.diamonds.tenpack": {type: "diamonds", quantity: 10},
+    "com.lovenme.diamonds.fiftypack": {type: "diamonds", quantity: 50},
+    "com.lovenme.diamonds.hundredpack": {type: "diamonds", quantity: 100},
+    "com.lovenme.diamonds.twfiftypack": {type: "diamonds", quantity: 250},
+    "com.lovenme.diamonds.fivehundredpack": {type: "diamonds", quantity: 500},
+    "com.lovenme.superchats.threepacks": {type: "superChats", quantity: 3},
+    "com.lovenme.superchats.tenpacks": {type: "superChats", quantity: 10},
+    "com.lovenme.superchats.twentyfivepacks": {type: "superChats", quantity: 25},
+  };
+  return skuMap[sku] || null;
+}
+
+// 📝 Purchase kayıtlarını "refunded" olarak işaretle
+async function _markPurchasesRefunded(db, userId, productId) {
+  try {
+    const snap = await db.collection("purchases")
+      .where("userId", "==", userId)
+      .where("productId", "==", productId)
+      .where("status", "==", "completed")
+      .limit(5)
+      .get();
+
+    const batch = db.batch();
+    for (const doc of snap.docs) {
+      batch.update(doc.ref, {
+        status: "refunded",
+        refundedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    if (!snap.empty) await batch.commit();
+  } catch (error) {
+    console.error("❌ _markPurchasesRefunded hatası:", error);
+  }
+}
+
+// 📝 İade event'i logla
+async function _logRefundEvent(db, type, userId, productId, token) {
+  try {
+    await db.collection("refund_events").add({
+      type: type,
+      userId: userId || null,
+      productId: productId || null,
+      token: token ? (token.length > 30 ? token.substring(0, 30) + "..." : token) : null,
+      timestamp: FieldValue.serverTimestamp(),
+      needsReview: !userId, // userId bulunamadıysa manual review gerekiyor
+    });
+  } catch (error) {
+    console.error("❌ _logRefundEvent hatası:", error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔍 VOIDED PURCHASES CHECKER — Günlük cron ile iade edilen alımları kontrol et
+// ─────────────────────────────────────────────────────────────────────────────
+// RTDN'in kaçırdığı iadeleri yakalamak için ek güvenlik katmanı.
+// Google Play Voided Purchases API ile son 24 saatteki iadeleri kontrol eder.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.checkVoidedPurchases = onSchedule({
+  schedule: "0 3 * * *", // Her gün saat 03:00 (gece)
+  timeZone: "Europe/Istanbul",
+  region: "us-central1",
+  secrets: [googleServiceAccountKey],
+}, async () => {
+  console.log("🔍 Voided purchases kontrolü başlatılıyor...");
+
+  const db = getFirestore();
+  const packageName = "com.lovenme.app";
+
+  try {
+    // Service account ile auth
+    const serviceAccountJson = JSON.parse(googleServiceAccountKey.value());
+    const auth = new GoogleAuth({
+      credentials: serviceAccountJson,
+      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    });
+    const client = await auth.getClient();
+    const tokenResponse = await client.getAccessToken();
+    const accessToken = tokenResponse.token;
+
+    // Son 24 saatteki voided purchases
+    const startTimeMillis = Date.now() - (24 * 60 * 60 * 1000);
+    const apiUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/voidedpurchases?startTime=${startTimeMillis}&maxResults=100`;
+
+    const response = await axios.get(apiUrl, {
+      headers: {Authorization: `Bearer ${accessToken}`},
+    });
+
+    const voidedPurchases = response.data.voidedPurchases || [];
+    console.log(`🔍 ${voidedPurchases.length} voided purchase bulundu`);
+
+    let processedCount = 0;
+
+    for (const vp of voidedPurchases) {
+      const orderId = vp.orderId;
+      const purchaseToken = vp.purchaseToken;
+      const productType = vp.purchaseType; // 0 = subscription, 1 = product
+
+      // Daha önce işlenmiş mi kontrol et
+      const existingSnap = await db.collection("refund_events")
+        .where("token", "==", orderId)
+        .where("type", "in", ["voided_purchase_processed", "subscription_revoked", "consumable_refunded"])
+        .limit(1)
+        .get();
+
+      if (!existingSnap.empty) {
+        continue; // Zaten işlenmiş
+      }
+
+      console.log(`💸 Voided purchase işleniyor: orderId=${orderId}, type=${productType}`);
+
+      // Purchase token ile userId bul
+      const userId = await _findUserByPurchaseToken(db, purchaseToken);
+
+      if (!userId) {
+        // orderId ile de dene
+        const purchaseSnap = await db.collection("purchases")
+          .where("orderId", "==", orderId)
+          .limit(1)
+          .get();
+
+        if (!purchaseSnap.empty) {
+          const pData = purchaseSnap.docs[0].data();
+          if (productType === 0) {
+            await _handleSubscriptionRevoked(db, purchaseToken, pData.productId);
+          } else {
+            await _handleConsumableRefund(db, purchaseToken, pData.productId);
+          }
+        } else {
+          await _logRefundEvent(db, "voided_cron_no_match", null, null, orderId);
+        }
+        continue;
+      }
+
+      // userId bulundu — benefit geri al
+      // productId'yi purchases'dan bul
+      const purchaseSnap = await db.collection("purchases")
+        .where("userId", "==", userId)
+        .where("status", "==", "completed")
+        .orderBy("createdAt", "desc")
+        .limit(10)
+        .get();
+
+      if (!purchaseSnap.empty) {
+        const pData = purchaseSnap.docs[0].data();
+        if (productType === 0) {
+          await _handleSubscriptionRevoked(db, purchaseToken, pData.productId);
+        } else {
+          await _handleConsumableRefund(db, purchaseToken, pData.productId);
+        }
+      }
+
+      processedCount++;
+    }
+
+    // Log
+    await db.collection("system_logs").add({
+      type: "voided_purchases_check",
+      timestamp: new Date(),
+      totalFound: voidedPurchases.length,
+      processedCount: processedCount,
+      status: "completed",
+    });
+
+    console.log(`✅ Voided purchases kontrolü tamamlandı: ${processedCount}/${voidedPurchases.length} işlendi`);
+  } catch (error) {
+    console.error("❌ Voided purchases kontrolü hatası:", error);
+
+    // 404 = API etkin değil (normal, Play Console'da etkinleştirilmeli)
+    if (error.response && error.response.status === 404) {
+      console.warn("⚠️ Voided Purchases API etkin değil. Google Play Console'dan etkinleştirin.");
+    }
+
+    await db.collection("system_logs").add({
+      type: "voided_purchases_check",
+      timestamp: new Date(),
+      error: error.message,
+      status: "failed",
+    });
+  }
+});
+
+// ============================================================
+// 📱 NETGSM SMS OTP — CLOUD FUNCTIONS (güvenli, server-side)
+// Credentials: Firebase Functions config ile env'den okunur
+// ============================================================
+
+/**
+ * sendOtpSms — OTP kodu oluştur ve NetGSM ile gönder
+ * Client sadece telefon numarası gönderir, credentials server'da kalır
+ */
+exports.sendOtpSms = onCall({region: "europe-west1"}, async (request) => {
+  // Auth kontrolü
+  if (!request.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Giriş yapmalısınız.");
+  }
+
+  const {phoneNumber} = request.data;
+  if (!phoneNumber) {
+    throw new functions.https.HttpsError("invalid-argument", "Telefon numarası gerekli.");
+  }
+
+  // Telefon numarasını temizle
+  let cleanPhone = phoneNumber.replace(/[^\d+]/g, "");
+  if (!cleanPhone.startsWith("+")) {
+    if (cleanPhone.startsWith("90")) {
+      cleanPhone = "+" + cleanPhone;
+    } else if (cleanPhone.startsWith("0")) {
+      cleanPhone = "+90" + cleanPhone.substring(1);
+    } else {
+      cleanPhone = "+90" + cleanPhone;
+    }
+  }
+
+  // Rate limiting: aynı numaraya 60 saniyede 1'den fazla SMS gönderme
+  const db = getFirestore();
+  const recentOtp = await db.collection("otp_codes")
+      .where("phoneNumber", "==", cleanPhone)
+      .where("createdAt", ">", new Date(Date.now() - 60 * 1000))
+      .limit(1)
+      .get();
+
+  if (!recentOtp.empty) {
+    throw new functions.https.HttpsError("resource-exhausted", "Lütfen 60 saniye bekleyin.");
+  }
+
+  // 6 haneli OTP kodu oluştur
+  const otpCode = String(100000 + Math.floor(Math.random() * 900000));
+
+  // OTP kodunu Firestore'a kaydet (5 dk geçerli)
+  await db.collection("otp_codes").add({
+    phoneNumber: cleanPhone,
+    code: otpCode,
+    userId: request.auth.uid,
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    verified: false,
+  });
+
+  // NetGSM API ile SMS gönder
+  const message = `Lovenme doğrulama kodunuz: ${otpCode}\n\nBu kodu kimseyle paylaşmayın.`;
+  const smsPhone = cleanPhone.replace("+", "");
+
+  const params = new URLSearchParams({
+    usercode: netgsmUsercode.value(),
+    password: netgsmPassword.value(),
+    gsmno: smsPhone,
+    message: message,
+    msgheader: netgsmHeader.value(),
+  });
+
+  try {
+    const smsResponse = await axios.get(
+        `https://api.netgsm.com.tr/sms/send/get/?${params.toString()}`,
+    );
+
+    const body = (smsResponse.data || "").toString().trim();
+
+    if (body.startsWith("00") || body.startsWith("01") || body.startsWith("02")) {
+      console.log(`✅ OTP SMS gönderildi: ${cleanPhone}`);
+      return {success: true};
+    } else {
+      console.error(`❌ NetGSM hata: ${body}`);
+      throw new functions.https.HttpsError("internal", "SMS gönderilemedi.");
+    }
+  } catch (error) {
+    console.error("❌ NetGSM API hatası:", error.message);
+    throw new functions.https.HttpsError("internal", "SMS servisi hatası.");
+  }
+});
+
+/**
+ * verifyOtpSms — OTP kodunu server-side doğrula
+ * Client hiçbir zaman OTP kodunu doğrudan göremez
+ */
+exports.verifyOtpSms = onCall({region: "europe-west1"}, async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Giriş yapmalısınız.");
+  }
+
+  const {phoneNumber, otpCode} = request.data;
+  if (!phoneNumber || !otpCode) {
+    throw new functions.https.HttpsError("invalid-argument", "Telefon ve kod gerekli.");
+  }
+
+  let cleanPhone = phoneNumber.replace(/[^\d+]/g, "");
+  if (!cleanPhone.startsWith("+")) {
+    if (cleanPhone.startsWith("90")) {
+      cleanPhone = "+" + cleanPhone;
+    } else if (cleanPhone.startsWith("0")) {
+      cleanPhone = "+90" + cleanPhone.substring(1);
+    } else {
+      cleanPhone = "+90" + cleanPhone;
+    }
+  }
+
+  const db = getFirestore();
+
+  // En son gönderilen ve süresi dolmamış OTP'yi bul
+  const otpDocs = await db.collection("otp_codes")
+      .where("phoneNumber", "==", cleanPhone)
+      .where("verified", "==", false)
+      .where("expiresAt", ">", new Date())
+      .orderBy("expiresAt", "desc")
+      .limit(1)
+      .get();
+
+  if (otpDocs.empty) {
+    return {success: false, error: "Kod süresi dolmuş veya bulunamadı."};
+  }
+
+  const otpDoc = otpDocs.docs[0];
+  const storedCode = otpDoc.data().code;
+
+  if (storedCode === otpCode) {
+    // Doğrulandı — işaretle
+    await otpDoc.ref.update({verified: true, verifiedAt: new Date()});
+
+    // Eski OTP'leri temizle
+    const oldOtps = await db.collection("otp_codes")
+        .where("phoneNumber", "==", cleanPhone)
+        .where("verified", "==", false)
+        .get();
+    const batch = db.batch();
+    oldOtps.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+
+    console.log(`✅ OTP doğrulandı: ${cleanPhone}`);
+    return {success: true};
+  } else {
+    return {success: false, error: "Hatalı doğrulama kodu."};
+  }
+});

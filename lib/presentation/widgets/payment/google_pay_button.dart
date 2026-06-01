@@ -74,8 +74,10 @@ class _CustomGooglePayButtonState extends State<CustomGooglePayButton> {
     widget.onPaymentStarted?.call();
 
     try {
-      await Future.delayed(const Duration(seconds: 2));
-      widget.onPaymentSuccess?.call();
+      // ⛔ Bu buton gerçek ödeme yapmıyor — her zaman hata ver
+      // Gerçek ödeme için IAPPaymentButton kullanılmalı
+      widget.onPaymentError?.call(
+          'Bu ödeme yöntemi desteklenmiyor. Lütfen uygulamayı güncelleyin.');
     } catch (e) {
       widget.onPaymentError?.call('Ödeme işlemi tamamlanamadı');
     } finally {

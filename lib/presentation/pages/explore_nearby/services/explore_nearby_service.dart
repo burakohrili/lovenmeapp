@@ -6,7 +6,7 @@ import '../models/venue_detail_model.dart';
 
 class ExploreNearbyService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   // 🎯 CACHE: Memory cache for venues
   static final Map<String, List<ExploreVenue>> _venueCache = {};
   static DateTime? _lastCacheTime;
@@ -18,21 +18,21 @@ class ExploreNearbyService {
     bool forceRefresh = false,
   }) async {
     final now = DateTime.now();
-    
+
     // Cache geçerliyse ve force refresh değilse cache'den dön
-    if (!forceRefresh && 
-        _venueCache.containsKey(userId) && 
-        _lastCacheTime != null && 
+    if (!forceRefresh &&
+        _venueCache.containsKey(userId) &&
+        _lastCacheTime != null &&
         now.difference(_lastCacheTime!) < _cacheDuration) {
       return _venueCache[userId]!;
     }
-    
+
     final venues = await getUserCheckedInVenues(userId);
-    
+
     // Cache'e kaydet
     _venueCache[userId] = venues;
     _lastCacheTime = now;
-    
+
     return venues;
   }
 
@@ -51,22 +51,22 @@ class ExploreNearbyService {
   }) async {
     try {
       final stopwatch = Stopwatch()..start();
-      
+
       // 🎯 PAGINATION: Query builder
       Query checkInsQuery = _firestore
           .collection('check_ins')
           .where('userId', isEqualTo: userId)
           .orderBy('checkInTime', descending: true);
-      
+
       // Pagination desteği
       if (lastDocument != null) {
         checkInsQuery = checkInsQuery.startAfterDocument(lastDocument);
       }
-      
+
       if (limit != null) {
         checkInsQuery = checkInsQuery.limit(limit);
       }
-      
+
       // 1. Normal check-in'leri getir
       final checkInsSnapshot = await checkInsQuery.get();
 
@@ -79,7 +79,7 @@ class ExploreNearbyService {
 
       // 3. Benzersiz venue ID'leri topla (hem normal hem favori check-in'lerden)
       final venueIds = <String>{};
-      
+
       // Normal check-in'ler
       for (var doc in checkInsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>?;
@@ -90,7 +90,7 @@ class ExploreNearbyService {
           }
         }
       }
-      
+
       // Favori mekanlardan gelen check-in'ler
       for (var doc in favoriteCheckInsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>?;
@@ -106,11 +106,10 @@ class ExploreNearbyService {
         return [];
       }
 
-
       // 4. BATCH: Tüm venue bilgilerini tek seferde çek (max 10 at a time for Firestore limit)
       final venuesList = venueIds.toList();
       final venuesData = <String, Map<String, dynamic>>{};
-      
+
       // Firestore'da "in" query 10 item limit var, chunk'lara bölelim
       for (var i = 0; i < venuesList.length; i += 10) {
         final chunk = venuesList.skip(i).take(10).toList();
@@ -118,7 +117,7 @@ class ExploreNearbyService {
             .collection('venues')
             .where(FieldPath.documentId, whereIn: chunk)
             .get();
-        
+
         for (var doc in venuesSnapshot.docs) {
           venuesData[doc.id] = doc.data();
         }
@@ -127,12 +126,13 @@ class ExploreNearbyService {
       // 5. BATCH: Son 30 günün TÜM check-in'lerini tek query'de al
       final today = DateTime.now();
       final thirtyDaysAgo = today.subtract(const Duration(days: 30));
-      
+
       final allCheckInsSnapshot = await _firestore
           .collection('check_ins')
-          .where('checkInTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
+          .where('checkInTime',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
           .get();
-      
+
       // Venue ID'ye göre gruplayalım
       final checkInsByVenue = <String, List<Map<String, dynamic>>>{};
       for (var doc in allCheckInsSnapshot.docs) {
@@ -150,11 +150,14 @@ class ExploreNearbyService {
         try {
           final venueData = venuesData[venueId];
           if (venueData == null) continue;
-          
+
           final checkIns = checkInsByVenue[venueId] ?? [];
-          
+
           // Benzersiz kullanıcı sayısı
-          final uniqueUserIds = checkIns.map((c) => c['userId'] as String?).where((id) => id != null).toSet();
+          final uniqueUserIds = checkIns
+              .map((c) => c['userId'] as String?)
+              .where((id) => id != null)
+              .toSet();
           final totalCheckIns = uniqueUserIds.length;
 
           // Son check-in zamanı
@@ -165,7 +168,7 @@ class ExploreNearbyService {
                 .where((t) => t != null)
                 .map((t) => t!.toDate())
                 .toList();
-            
+
             if (timestamps.isNotEmpty) {
               timestamps.sort((a, b) => b.compareTo(a));
               lastCheckInTime = timestamps.first;
@@ -196,7 +199,7 @@ class ExploreNearbyService {
                 .where('isPermanent', isEqualTo: true)
                 .limit(1)
                 .get();
-            
+
             isFavorite = favoriteCheckIns.docs.isNotEmpty;
           } catch (e) {
             // Favori kontrolü hatası göz ardı edilebilir
@@ -219,7 +222,7 @@ class ExploreNearbyService {
             latitude: venueData['latitude']?.toDouble(),
             longitude: venueData['longitude']?.toDouble(),
           );
-          
+
           venues.add(venue);
         } catch (e) {
           continue;
@@ -245,7 +248,7 @@ class ExploreNearbyService {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
-      
+
       // date field ile query yap (document ID değil!)
       final mayorsSnapshot = await _firestore
           .collection('daily_mayors')
@@ -253,38 +256,38 @@ class ExploreNearbyService {
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(endOfDay))
           .get();
-      
+
       if (mayorsSnapshot.docs.isEmpty) {
         return null;
       }
-      
+
       // En yüksek diamond'lı mayor'u seç
       DocumentSnapshot? bestMayorDoc;
       int highestDiamonds = -1;
-      
+
       for (var doc in mayorsSnapshot.docs) {
         final data = doc.data();
         final diamonds = data['diamondsSpent'] ?? 0;
-        
+
         if (diamonds > highestDiamonds) {
           highestDiamonds = diamonds;
           bestMayorDoc = doc;
         }
       }
-      
+
       if (bestMayorDoc == null) {
         return null;
       }
-      
+
       final mayorData = bestMayorDoc.data() as Map<String, dynamic>;
       final mayorUserId = mayorData['userId'] as String;
       final mayorType = mayorData['mayorType'] as String? ?? 'first_checkin';
       final diamondsSpent = mayorData['diamondsSpent'] ?? 0;
-      
-      
+
       // Kullanıcı bilgilerini getir
-      final userDoc = await _firestore.collection('users').doc(mayorUserId).get();
-      
+      final userDoc =
+          await _firestore.collection('users').doc(mayorUserId).get();
+
       if (!userDoc.exists) {
         return null;
       }
@@ -292,7 +295,6 @@ class ExploreNearbyService {
       final userData = userDoc.data()!;
 
       final isDiamondMayor = mayorType == 'diamond';
-      
 
       return CheckedInUserPreview(
         userId: mayorUserId,
@@ -316,11 +318,12 @@ class ExploreNearbyService {
       // Son 30 günün check-in'lerini getir
       final today = DateTime.now();
       final thirtyDaysAgo = today.subtract(const Duration(days: 30));
-      
+
       final checkInsSnapshot = await _firestore
           .collection('check_ins')
           .where('venueId', isEqualTo: venueId)
-          .where('checkInTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
+          .where('checkInTime',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
           .orderBy('checkInTime', descending: true)
           .limit(50)
           .get();
@@ -344,11 +347,12 @@ class ExploreNearbyService {
 
       // Kullanıcı bilgilerini getir
       final users = <CheckedInUserPreview>[];
-      
+
       for (var userId in userIds.take(limit)) {
         try {
-          final userDoc = await _firestore.collection('users').doc(userId).get();
-          
+          final userDoc =
+              await _firestore.collection('users').doc(userId).get();
+
           if (!userDoc.exists) continue;
 
           final userData = userDoc.data()!;
@@ -360,7 +364,8 @@ class ExploreNearbyService {
               .toList();
           DateTime lastCheckIn = DateTime.now();
           if (userCheckIns.isNotEmpty) {
-            final timestamp = userCheckIns.first.data()['checkInTime'] as Timestamp?;
+            final timestamp =
+                userCheckIns.first.data()['checkInTime'] as Timestamp?;
             if (timestamp != null) {
               lastCheckIn = timestamp.toDate();
             }
@@ -397,7 +402,7 @@ class ExploreNearbyService {
     try {
       // 1. Venue bilgilerini getir
       final venueDoc = await _firestore.collection('venues').doc(venueId).get();
-      
+
       if (!venueDoc.exists) {
         return null;
       }
@@ -407,11 +412,12 @@ class ExploreNearbyService {
       // 2. Son 30 günün check-in'lerini getir
       final today = DateTime.now();
       final thirtyDaysAgo = today.subtract(const Duration(days: 30));
-      
+
       final checkInsSnapshot = await _firestore
           .collection('check_ins')
           .where('venueId', isEqualTo: venueId)
-          .where('checkInTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
+          .where('checkInTime',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
           .orderBy('checkInTime', descending: true)
           .get();
 
@@ -422,10 +428,10 @@ class ExploreNearbyService {
       for (var doc in checkInsSnapshot.docs) {
         final userId = doc.data()['userId'] as String?;
         final checkInTime = (doc.data()['checkInTime'] as Timestamp?)?.toDate();
-        
+
         if (userId != null && checkInTime != null) {
           userCheckInCounts[userId] = (userCheckInCounts[userId] ?? 0) + 1;
-          
+
           // En son check-in zamanını kaydet
           if (!userLastCheckIns.containsKey(userId) ||
               checkInTime.isAfter(userLastCheckIns[userId]!)) {
@@ -441,9 +447,12 @@ class ExploreNearbyService {
       final venueUsers = <VenueUser>[];
       for (var entry in userCheckInCounts.entries) {
         try {
-          final userDoc = await _firestore.collection('users').doc(entry.key).get();
-          
-          if (!userDoc.exists) continue;
+          final userDoc =
+              await _firestore.collection('users').doc(entry.key).get();
+
+          if (!userDoc.exists) {
+            continue;
+          }
 
           final userData = userDoc.data()!;
           final isMayor = entry.key == mayor?.userId;
@@ -478,8 +487,7 @@ class ExploreNearbyService {
       // 6. VenueDetail oluştur
       final firstPhoto = _getFirstPhoto(venueData);
       final allPhotos = _getPhotos(venueData);
-      
-      
+
       return VenueDetail(
         id: venueId,
         name: venueData['name'] ?? 'Unknown Venue',
@@ -498,9 +506,7 @@ class ExploreNearbyService {
         mayorUserId: mayor?.userId,
         mayorName: mayor?.name,
         mayorPhotoUrl: mayor?.photoUrl,
-        mayorCheckIns: mayor != null
-            ? userCheckInCounts[mayor.userId] ?? 0
-            : 0,
+        mayorCheckIns: mayor != null ? userCheckInCounts[mayor.userId] ?? 0 : 0,
         isDiamondMayor: mayor?.isDiamondMayor ?? false,
         isSponsored: venueData['isSponsored'] ?? false,
         sponsorLogoUrl: venueData['sponsorLogoUrl'],

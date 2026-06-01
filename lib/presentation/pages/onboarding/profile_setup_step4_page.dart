@@ -58,7 +58,26 @@ class _ProfileSetupStep4PageState extends ConsumerState<ProfileSetupStep4Page> {
   void initState() {
     super.initState();
     _checkApiConfiguration();
+    _loadExistingVenues(); // 🔥 YENİ: Önce mevcut mekanları yükle
     _initializeLocationAndVenues();
+  }
+  
+  // 🔥 YENİ: Provider'dan mevcut favori mekanları yükle
+  void _loadExistingVenues() {
+    final profile = ref.read(userProfileProvider);
+    if (profile.favoriteVenueDetails.isNotEmpty) {
+      setState(() {
+        selectedVenueDetails = List.from(profile.favoriteVenueDetails);
+        selectedVenues = List.from(profile.favoriteVenues);
+        
+        // İsimleri de al
+        for (var venue in selectedVenueDetails) {
+          if (venue['name'] != null) {
+            selectedVenueIds[venue['name']] = venue['place_id'] ?? '';
+          }
+        }
+      });
+    }
   }
 
   @override

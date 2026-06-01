@@ -25,49 +25,9 @@ class _SimplePaymentButtonState extends State<SimplePaymentButton> {
   bool _isLoading = false;
 
   Future<void> _handlePurchase() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final paymentService = PaymentService();
-      final success = await paymentService.purchaseItem(widget.item);
-
-      if (success && mounted) {
-        // Başarı mesajı
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${widget.item.title} başarıyla satın alındı!',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        
-        widget.onSuccess?.call();
-      } else {
-        widget.onError?.call('Satın alma işlemi başarısız oldu');
-      }
-    } catch (e) {
-      widget.onError?.call('Satın alma işlemi tamamlanamadı');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    // ⛔ Bu buton gerçek ödeme yapmıyor — IAP akışı UniversalPaymentButton üzerinden gitmelidir
+    // Burada payment_service.purchaseItem() sahte bir delay'dir, Google Play Billing DEĞİL
+    widget.onError?.call('Ödeme sistemi geçici olarak kullanılamıyor. Lütfen tekrar deneyin.');
   }
 
   @override

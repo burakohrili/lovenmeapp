@@ -8,16 +8,16 @@ import 'package:lovenme/presentation/widgets/payment/universal_payment_button.da
 class QuickPurchaseWidget extends StatelessWidget {
   /// Ödeme paketi
   final PaymentPackage package;
-  
+
   /// Ödeme başarılı callback
   final VoidCallback? onPaymentSuccess;
-  
+
   /// Ödeme hatası callback
   final ValueChanged<String>? onPaymentError;
-  
+
   /// Kompakt mod (sadece fiyat ve buton)
   final bool ultraCompact;
-  
+
   /// Yatay layout
   final bool horizontal;
 
@@ -35,7 +35,7 @@ class QuickPurchaseWidget extends StatelessWidget {
     if (ultraCompact) {
       return _buildUltraCompactVersion(context);
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -64,7 +64,7 @@ class QuickPurchaseWidget extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            '${package.price.toStringAsFixed(0)} ₺',
+            package.priceString ?? '${package.price.toStringAsFixed(0)} ₺',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
@@ -105,7 +105,7 @@ class QuickPurchaseWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '₺${package.price.toStringAsFixed(0)}',
+          package.priceString ?? '₺${package.price.toStringAsFixed(0)}',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 10,
@@ -119,13 +119,13 @@ class QuickPurchaseWidget extends StatelessWidget {
   IconData _getPackageIcon() {
     switch (package.type) {
       case PaymentType.muhtar:
-        return Icons.account_balance; // Muhtar ikonu (government building)
+        return Icons.account_balance;
       case PaymentType.premium:
-        return Icons.star; // Premium ikonu
+        return Icons.star;
       case PaymentType.diamond:
-        return Icons.diamond; // Elmas ikonu
+        return Icons.diamond;
       case PaymentType.superlike:
-        return Icons.favorite; // Süper like ikonu
+        return Icons.favorite;
     }
   }
 
@@ -181,27 +181,27 @@ class QuickPurchaseWidget extends StatelessWidget {
               const SizedBox(height: 20),
               if (package.features.isNotEmpty) ...[
                 ...package.features.take(3).map((feature) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle,
-                        color: AppColors.success,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          feature,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 13,
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: AppColors.success,
+                            size: 16,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              feature,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                )),
+                    )),
                 const SizedBox(height: 16),
               ],
               Row(
@@ -229,7 +229,7 @@ class QuickPurchaseWidget extends StatelessWidget {
                         const SizedBox(height: 2),
                       ],
                       Text(
-                        '₺${package.price.toStringAsFixed(2)}',
+                        package.priceString ?? '₺${package.price.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.primary,
                           fontSize: 20,

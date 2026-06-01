@@ -60,6 +60,23 @@ firebase_options.dart
 key.properties
 upload-keystore.jks
 
+# Cloud Functions secrets
+functions/.env
+functions/.env.*
+
+# Backup files
+*.bak
+*.orig
+*.tmp
+
+# Debug / Geliştirici analiz dosyaları (isteğe bağlı commit etmek için kaldır)
+# PAYMENT_ANALYSIS.md
+# SECURITY_ANALYSIS.md
+# TEST_SCENARIOS.md
+# PLAYSTORE_LAUNCH_CHECKLIST.md
+# RELEASE_TODO.md
+# BRAZIL_LOCALIZATION_PLAN.md
+
 # Flutter
 **/doc/api/
 **/ios/Flutter/.last_build_id
@@ -73,3 +90,10 @@ upload-keystore.jks
 
 # FVM Version Cache
 .fvm/
+
+# iOS Pods (opsiyonel, büyük repo boyutu)
+# ios/Pods/
+
+# Web admin panelleri (lokalde kalır, GitHub'a yüklenmez)
+web/admin/
+web/sponsor-admin-panel/

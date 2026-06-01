@@ -1,7 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-  
+
+  // ==========================================
+  // Admin Helper Function
+  // ==========================================
+  function isAdmin() {
+    return request.auth != null && request.auth.token.admin == true;
+  }
+
   // Daily mayors (GÜNLÜK MUHTARLAR) - Enhanced for atomic transactions
 match /daily_mayors/{mayorId} {
   allow read: if request.auth != null;
@@ -39,9 +46,13 @@ match /blocked_users/{blockId} {
       allow delete: if request.auth != null;
     }
     
-    // Password reset codes (ŞİFRE SIFIRLAMA KODLARI) - YENİ EKLENEN
+    // Password reset codes (ŞİFRE SIFIRLAMA KODLARI)
+    // Not: Şifre sıfırlama akışı için client-side write gerekli (auth olmadan)
+    // Güvenlik: 5dk expire + 6 haneli kod + email doğrulama + Cloud Function final step
 match /password_reset_codes/{email} {
-  allow read, write: if true; // Public access for password reset
+  allow read: if true;
+  allow write: if true; // Şifre sıfırlama akışı login olmadan çalışır
+  // TODO: Bu akışı tamamen Cloud Function'a taşı
 }
     
 // Email verification (EMAIL DOĞRULAMA) - YENİ EKLENEN
@@ -102,10 +113,10 @@ match /mayor_bids/{bidId} {
 
 // Diamond transactions (ELMAS İŞLEMLERİ) - GÜNCELLENMIŞ
 match /diamond_transactions/{transactionId} {
-  allow read: if request.auth != null && 
-    request.auth.uid == resource.data.userId;
-  allow create: if request.auth != null && 
-    request.auth.uid == request.resource.data.userId;
+  allow read: if isAdmin() || (request.auth != null && 
+    request.auth.uid == resource.data.userId);
+  allow create: if isAdmin() || (request.auth != null && 
+    request.auth.uid == request.resource.data.userId);
   allow update: if false;
   allow delete: if false;
   allow write: if request.auth != null; // Atomic transaction support
@@ -125,8 +136,9 @@ match /premium_subscriptions/{subscriptionId} {
 
 // Purchases (SATIN ALMA İŞLEMLERİ) - SUPER LIKE İÇİN YENİ EKLENEN
 match /purchases/{purchaseId} {
-  allow read: if request.auth != null && 
-    request.auth.uid == resource.data.userId;
+  allow read: if isAdmin() || (request.auth != null && 
+    request.auth.uid == resource.data.userId);
+  allow list: if isAdmin() || request.auth != null; // 🛡️ Duplicate check query için (purchaseId where sorgusu)
   allow create: if request.auth != null && 
     request.auth.uid == request.resource.data.userId;
   allow update: if request.auth != null && 
@@ -171,10 +183,10 @@ match /restored_purchases/{restoreId} {
     match /users/{userId} {
       allow read: if true; // Email ile arama için public read
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && 
+      allow update: if isAdmin() || (request.auth != null && 
         (request.auth.uid == userId || 
          // Elmas güncellemeleri için admin izni
-         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diamonds', 'diamondCount', 'updatedAt'])));
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diamonds', 'diamondCount', 'updatedAt']))));
       allow delete: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null; // Atomic transaction support
     }
@@ -211,16 +223,17 @@ match /restored_purchases/{restoreId} {
     match /venues/{venueId} {
       allow read: if true; // Herkes okuyabilir
       allow create: if request.auth != null;
-      allow update: if true; // Admin panel için sponsor güncellemeleri
+      allow update: if request.auth != null; // Authenticated users only
       allow delete: if false;
     }
     
-    // Sponsored chains (SPONSOR ZİNCİRLER) - YENİ EKLENEN
+    // Sponsored chains (SPONSOR ZİNCİRLER)
+    // ⚠️ Sadece Cloud Functions / Admin SDK üzerinden yönetilir
     match /sponsored_chains/{chainId} {
       allow read: if true; // Herkes okuyabilir
-      allow create: if true; // Admin panel için
-      allow update: if true; // Admin panel için
-      allow delete: if true; // Admin panel için
+      allow create: if false; // Sadece Admin SDK
+      allow update: if false; // Sadece Admin SDK
+      allow delete: if false; // Sadece Admin SDK
     }
     
     // Matches 
@@ -283,11 +296,11 @@ match /restored_purchases/{restoreId} {
     
     // Reports - GÜNCELLENMİŞ 
     match /reports/{reportId} {
-      allow read: if request.auth != null && 
+      allow read: if isAdmin() || (request.auth != null && 
         (request.auth.uid == resource.data.reporter || 
-         request.auth.uid == resource.data.reported);
+         request.auth.uid == resource.data.reported));
       allow create: if request.auth != null;
-      allow update: if false;
+      allow update: if isAdmin();
       allow delete: if false;
     }
     
@@ -349,6 +362,38 @@ match /restored_purchases/{restoreId} {
       allow delete: if request.auth != null
         && request.auth.uid == resource.data.fromUserId
         && resource.data.status == 'pending';
+    }
+    
+    // OTP Codes — Sadece Cloud Functions yazabilir
+    match /otp_codes/{otpId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    
+    // RTDN Notifications — Sadece Cloud Functions yazabilir, Admin okuyabilir
+    match /rtdn_notifications/{notifId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    
+    // Refund Events — Sadece Cloud Functions yazabilir, Admin okuyabilir
+    match /refund_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    
+    // System Logs — Sadece Cloud Functions yazabilir, Admin okuyabilir
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // User Warnings — Admin Dashboard için
+    match /user_warnings/{warningId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if false;
+      allow delete: if false;
     }
   }
 }

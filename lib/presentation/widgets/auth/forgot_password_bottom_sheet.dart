@@ -18,7 +18,8 @@ class ForgotPasswordBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<ForgotPasswordBottomSheet> createState() => _ForgotPasswordBottomSheetState();
+  State<ForgotPasswordBottomSheet> createState() =>
+      _ForgotPasswordBottomSheetState();
 }
 
 class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
@@ -27,7 +28,7 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
   final _codeController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _isLoading = false;
   bool _codeSent = false;
   bool _codeVerified = false;
@@ -134,17 +135,16 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
 
   Future<void> _sendEmailWithResend(String email, String code) async {
     try {
-      
       // Firebase Function'ı çağır
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final callable = functions.httpsCallable('sendPasswordResetEmail');
-      
+
       final result = await callable.call({
         'email': email,
         'code': code,
         'userName': null, // Kullanıcı adı isteğe bağlı
       });
-      
+
       if (result.data['success'] == true) {
       } else {
         throw Exception(result.data['error'] ?? 'Email gönderilemedi');
@@ -155,7 +155,6 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
   }
 
   Future<void> _sendVerificationCode() async {
-    
     // Geçici olarak validation'ı atla
     // Validation check
     if (_emailController.text.trim().isEmpty) {
@@ -169,18 +168,16 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
       }
       return;
     }
-    
+
     setState(() => _isLoading = true);
 
     try {
-      
       // Önce Firestore'da kullanıcının var olup olmadığını kontrol et
       final userQuery = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: _emailController.text.trim())
           .limit(1)
           .get();
-
 
       if (userQuery.docs.isEmpty) {
         throw FirebaseAuthException(
@@ -200,9 +197,10 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
         'code': _sentCode,
         'email': _emailController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': DateTime.now().add(const Duration(minutes: 5)).millisecondsSinceEpoch,
+        'expiresAt': DateTime.now()
+            .add(const Duration(minutes: 5))
+            .millisecondsSinceEpoch,
       });
-
 
       // Resend ile email gönder
       try {
@@ -210,20 +208,20 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
       } catch (emailError) {
         // Email hatası olsa bile kod kaydedildi, devam et
       }
-      
+
       // Cooldown timer'ı başlat
       _lastCodeSentTime = DateTime.now();
       _startCooldownTimer();
-      
+
       setState(() {
         _codeSent = true;
       });
 
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Doğrulama kodu ${_emailController.text} adresine gönderildi'),
+            content: Text(
+                'Doğrulama kodu ${_emailController.text} adresine gönderildi'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 5),
           ),
@@ -231,7 +229,7 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
       }
     } on FirebaseAuthException catch (e) {
       String message = 'Bir hata oluştu';
-      
+
       switch (e.code) {
         case 'user-not-found':
           message = 'Bu email adresi ile kayıtlı kullanıcı bulunamadı';
@@ -240,7 +238,8 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
           message = 'Geçersiz email adresi';
           break;
         case 'too-many-requests':
-          message = 'Çok fazla deneme yapıldı. Lütfen daha sonra tekrar deneyin';
+          message =
+              'Çok fazla deneme yapıldı. Lütfen daha sonra tekrar deneyin';
           break;
         default:
           message = e.message ?? 'Bir hata oluştu';
@@ -334,21 +333,26 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
     setState(() => _isLoading = true);
 
     try {
-      // Kullanıcıyı email ile bul
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        // Geçici bir şifre ile giriş denemesi (bu başarısız olacak ama kullanıcıyı bulur)
-        password: 'temp_password_for_reset',
-      );
-    } on FirebaseAuthException catch (e) {
-      // Şifre yanlış hatası bekleniyor, bu normal
-      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        try {
-          // Password reset email gönder ve kullanıcıya yönlendir
-          await FirebaseAuth.instance.sendPasswordResetEmail(
-            email: _emailController.text.trim(),
-          );
+      // Firebase Admin SDK kullanarak şifre değişikliği yapmak için
+      // Firebase Functions kullanmak gerekiyor, ama daha basit bir yöntem var:
+      // 1. Önce şifre sıfırlama email'i gönder
+      // 2. Sonra kullanıcıdan email'deki link ile şifreyi değiştirmesini iste
 
+      // VEYA doğrudan Cloud Functions ile şifre değiştir
+      // Ama en güvenli yöntem: Kullanıcıyı otomatik olarak giriş yap ve şifreyi değiştir
+
+      // Email ile kullanıcıyı bul ve admin şifre sıfırlama yap
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('resetUserPassword');
+
+      try {
+        final result = await callable.call({
+          'email': _emailController.text.trim(),
+          'newPassword': _newPasswordController.text.trim(),
+          'verificationCode': _codeController.text.trim(),
+        });
+
+        if (result.data['success'] == true) {
           // Geçici kodu sil
           await FirebaseFirestore.instance
               .collection('password_reset_codes')
@@ -360,19 +364,43 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Şifre sıfırlama linki email adresinize gönderildi. '
-                  'Email\'inizdeki linke tıklayarak yeni şifrenizi belirleyebilirsiniz.',
+                  'Şifreniz başarıyla değiştirildi. '
+                  'Yeni şifreniz ile giriş yapabilirsiniz.',
                 ),
                 backgroundColor: AppColors.success,
-                duration: Duration(seconds: 5),
+                duration: Duration(seconds: 4),
               ),
             );
           }
-        } catch (resetError) {
-          throw Exception('Şifre sıfırlama işlemi başarısız');
+        } else {
+          throw Exception(result.data['error'] ?? 'Şifre değiştirilemedi');
         }
-      } else {
-        throw Exception('Kullanıcı bulunamadı');
+      } catch (functionsError) {
+        // Firebase Functions çalışmıyorsa, eski yöntemi kullan
+        // Password reset email gönder
+        await FirebaseAuth.instance.sendPasswordResetEmail(
+          email: _emailController.text.trim(),
+        );
+
+        // Geçici kodu sil
+        await FirebaseFirestore.instance
+            .collection('password_reset_codes')
+            .doc(_emailController.text.trim())
+            .delete();
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Şifre sıfırlama linki email adresinize gönderildi. '
+                'Email\'inizdeki linke tıklayarak yeni şifrenizi belirleyebilirsiniz.',
+              ),
+              backgroundColor: AppColors.warning,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -389,8 +417,6 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
       }
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -420,14 +446,14 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Title
           Text(
-            _codeVerified 
+            _codeVerified
                 ? 'Yeni Şifre Belirleyin'
-                : _codeSent 
+                : _codeSent
                     ? 'Doğrulama Kodunu Girin'
                     : 'Şifremi Unuttum',
             style: const TextStyle(
@@ -436,13 +462,13 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
               color: AppColors.primary,
             ),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           Text(
             _codeVerified
                 ? 'Hesabınız için yeni bir şifre belirleyin.'
-                : _codeSent 
+                : _codeSent
                     ? 'Email adresinize gönderilen 6 haneli doğrulama kodunu girin.'
                     : 'Email adresinizi girin, size doğrulama kodu gönderelim.',
             style: TextStyle(
@@ -450,9 +476,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
               color: Colors.grey[600],
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           Form(
             key: _formKey,
             child: Column(
@@ -473,17 +499,19 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       fillColor: Colors.grey[50],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Send code button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : () {
-                        _sendVerificationCode();
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              _sendVerificationCode();
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -491,13 +519,14 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: _isLoading 
+                      child: _isLoading
                           ? const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
                           : const Text(
@@ -510,7 +539,7 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                     ),
                   ),
                 ]
-                
+
                 // Code verification (kod gönderildikten sonra görünür)
                 else if (_codeSent && !_codeVerified) ...[
                   // Email display (read-only)
@@ -536,9 +565,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Code input
                   TextFormField(
                     controller: _codeController,
@@ -557,9 +586,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       counterText: '',
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Verify code button
                   SizedBox(
                     width: double.infinity,
@@ -572,21 +601,25 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       textColor: Colors.white,
                     ),
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Resend button
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(
-                      onPressed: _isLoading ? null : (_canSendCode ? () {
-                        setState(() {
-                          _codeSent = false;
-                          _codeController.clear();
-                        });
-                      } : null),
+                      onPressed: _isLoading
+                          ? null
+                          : (_canSendCode
+                              ? () {
+                                  setState(() {
+                                    _codeSent = false;
+                                    _codeController.clear();
+                                  });
+                                }
+                              : null),
                       child: Text(
-                        _canSendCode 
+                        _canSendCode
                             ? 'Kodu Tekrar Gönder'
                             : 'Tekrar Gönder ($_cooldownText)',
                         style: TextStyle(
@@ -597,7 +630,7 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                     ),
                   ),
                 ]
-                
+
                 // New password (kod doğrulandıktan sonra görünür)
                 else if (_codeVerified) ...[
                   // Email display (read-only)
@@ -627,9 +660,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // New password
                   TextFormField(
                     controller: _newPasswordController,
@@ -640,7 +673,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscureNewPassword ? Icons.visibility : Icons.visibility_off,
+                          _obscureNewPassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                         ),
                         onPressed: () {
                           setState(() {
@@ -655,9 +690,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       fillColor: Colors.grey[50],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Confirm password
                   TextFormField(
                     controller: _confirmPasswordController,
@@ -668,7 +703,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                          _obscureConfirmPassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                         ),
                         onPressed: () {
                           setState(() {
@@ -683,9 +720,9 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
                       fillColor: Colors.grey[50],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Update password button
                   SizedBox(
                     width: double.infinity,

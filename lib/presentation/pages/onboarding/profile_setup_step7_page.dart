@@ -97,6 +97,11 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
     List<String> photoUrls = [];
     int totalPhotos = localPaths.length;
     
+    // 🔧 FIX: Eğer fotoğraf yoksa boş liste dön
+    if (totalPhotos == 0) {
+      return photoUrls;
+    }
+    
     for (int i = 0; i < localPaths.length; i++) {
       try {
         setState(() {
@@ -718,14 +723,14 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
                         ),
                         const SizedBox(height: 12),
                         LinearProgressIndicator(
-                          value: uploadProgress,
+                          value: uploadProgress.isFinite ? uploadProgress : 0.0,
                           backgroundColor: AppColors.white.withOpacity(0.3),
                           valueColor: const AlwaysStoppedAnimation<Color>(AppColors.white),
                           minHeight: 8,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${(uploadProgress * 100).toInt()}%',
+                          '${uploadProgress.isFinite ? (uploadProgress * 100).toInt() : 0}%',
                           style: const TextStyle(
                             color: AppColors.white,
                             fontSize: 12,

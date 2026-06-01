@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
@@ -25,35 +26,38 @@ class IAPService {
   bool _purchasePending = false;
   bool _isPurchaseInProgress = false; // 🆕 Spam koruması
   final List<PurchaseDetails> _purchases = [];
-  
+
   // 🛡️ Purchase deduplication - aynı purchase'ın birden fazla işlenmesini önler
   final Set<String> _processedPurchases = <String>{};
 
   // UI Callback sistemi
   VoidCallback? _onPurchaseSuccess;
   ValueChanged<String>? _onPurchaseError;
+  /// PENDING durumunda timeout geldiğinde çağrılır.
+  /// UI spinner'ı kapatmak için kullanılır; bakiye güncellemesi daha sonra gelecek.
+  VoidCallback? _onPurchasePendingTimeout;
   String? _currentPurchaseProductId;
   Timer? _purchaseTimeout; // 🛡️ Purchase timeout protection
-  
+
   // Restore purchases counter
   int _restoredItemsCount = 0;
 
-    // ✅ UPDATED: App Store Connect'teki tüm mevcut ürünler
+  // ✅ UPDATED: App Store Connect'teki tüm mevcut ürünler
   static const Map<String, String> _productIds = {
     // Premium Subscriptions ✅
     'premium_weekly': 'com.lovenme.premium.weekly',
     'premium_monthly': 'com.lovenme.premium.monthly',
     'premium_quarterly': 'com.lovenme.premium.quarterly',
-    
+
     // Diamonds - ESKİ PAKETLER ✅
     'diamonds_10': 'com.lovenme.diamonds.tenpack',
     'diamonds_50': 'com.lovenme.diamonds.fiftypack',
     'diamonds_100': 'com.lovenme.diamonds.hundredpack',
-    
+
     // Diamonds - YENİ PAKETLER ✨
     'diamonds_250': 'com.lovenme.diamonds.twfiftypack',
     'diamonds_500': 'com.lovenme.diamonds.fivehundredpack',
-    
+
     // Super Chats 💬 Chat Request System
     'super_chats_3': 'com.lovenme.superchats.threepacks',
     'super_chats_10': 'com.lovenme.superchats.tenpacks',
@@ -62,118 +66,118 @@ class IAPService {
 
   // Product Details
   Map<String, Map<String, dynamic>> get productInfo => {
-    'premium_weekly': {
-      'title': 'Premium Haftalık',
-      'description': 'Sınırsız chat isteği, özel özellikler',
-      'price': 99.99,
-      'duration': '7 gün',
-      'features': [
-        'Sınırsız chat isteği',
-        'Check-in yapanların profillerini gör',
-        'Check-in yapmadan kişileri görebilme',
-        'Geçmiş check-in\'leri görüntüle',
-        '3 Süper Chat hakkı (Tek seferlik)'
-      ],
-    },
-    'premium_monthly': {
-      'title': 'Premium Aylık',
-      'description': 'En popüler seçenek! Sınırsız özellikler',
-      'price': 299.99,
-      'duration': '30 gün',
-      'features': [
-        'Sınırsız chat isteği',
-        'Check-in yapanların profillerini gör',
-        'Check-in yapmadan kişileri görebilme',
-        'Geçmiş check-in\'leri görüntüle',
-        '10 Süper Chat hakkı (Tek seferlik)'
-      ],
-    },
-    'premium_quarterly': {
-      'title': 'Premium 3 Aylık',
-      'description': '%44 tasarruf! Lansman özel fiyatı',
-      'price': 499.99,
-      'duration': '90 gün',
-      'features': [
-        'Sınırsız chat isteği',
-        'Check-in yapanların profillerini gör',
-        'Check-in yapmadan kişileri görebilme',
-        'Geçmiş check-in\'leri görüntüle',
-        '30 Süper Chat hakkı (Tek seferlik)'
-      ],
-    },
-    
-    // Diamonds - ESKİ PAKETLER ✅
-    'diamonds_10': {
-      'title': '10 Elmas',
-      'description': 'Premium özellikler için elmas',
-      'price': 74.99, // ✅ Fiyat güncellendi: 79.99 → 74.99
-      'quantity': 10,
-    },
-    'diamonds_50': {
-      'title': '50 Elmas',
-      'description': 'Premium özellikler için elmas',
-      'price': 249.99, // ✅ Fiyat güncellendi: 299.99 → 249.99
-      'quantity': 50,
-    },
-    'diamonds_100': {
-      'title': '100 Elmas',
-      'description': 'Premium özellikler için elmas',
-      'price': 499.99,
-      'quantity': 100,
-    },
-    
-    // Diamonds - YENİ PAKETLER ✨
-    'diamonds_250': {
-      'title': 'Standart - 250 Elmas',
-      'description': 'En çok tercih edilen elmas paketi',
-      'price': 999.99,
-      'quantity': 250,
-    },
-    'diamonds_500': {
-      'title': 'Efsane - 500 Elmas',
-      'description': 'En avantajlı elmas paketi',
-      'price': 1499.99,
-      'quantity': 500,
-    },
-    
-    // Super Chats 💬 Chat Request System
-    'super_chats_3': {
-      'title': '3 Super Chat',
-      'description': 'Özel mesajla öne çık ve fark yarat',
-      'price': 74.99,
-      'quantity': 3,
-      'features': [
-        '3 adet Super Chat hakkı',
-        '20 karakterlik özel mesaj',
-        'Anında dikkat çek',
-        'Match şansını artır'
-      ],
-    },
-    'super_chats_10': {
-      'title': '10 Super Chat',
-      'description': 'Daha fazla bağlantı için ideal paket',
-      'price': 219.99,
-      'quantity': 10,
-      'features': [
-        '10 adet Super Chat hakkı',
-        '20 karakterlik özel mesaj',
-        'Daha fazla match fırsatı',
-        'En popüler paket'
-      ],
-    },
-    'super_chats_25': {
-      'title': '25 Super Chat',
-      'description': 'Maximum etki için en büyük paket',
-      'price': 499.99,
-      'quantity': 25,
-      'features': [
-        '25 adet Super Chat hakkı',
-        '20 karakterlik özel mesaj',
-        'Sınırsız bağlantı imkanı',
-        'En avantajlı fiyat'
-      ],
-    },
-  };
+        'premium_weekly': {
+          'title': 'Premium Haftalık',
+          'description': 'Sınırsız chat isteği, özel özellikler',
+          'price': 95.99,
+          'duration': '7 gün',
+          'features': [
+            'Sınırsız chat isteği',
+            'Check-in yapanların profillerini gör',
+            'Check-in yapmadan kişileri görebilme',
+            'Geçmiş check-in\'leri görüntüle',
+            '3 Süper Chat hakkı (Tek seferlik)'
+          ],
+        },
+        'premium_monthly': {
+          'title': 'Premium Aylık',
+          'description': 'En popüler seçenek! Sınırsız özellikler',
+          'price': 359.99,
+          'duration': '30 gün',
+          'features': [
+            'Sınırsız chat isteği',
+            'Check-in yapanların profillerini gör',
+            'Check-in yapmadan kişileri görebilme',
+            'Geçmiş check-in\'leri görüntüle',
+            '10 Süper Chat hakkı (Tek seferlik)'
+          ],
+        },
+        'premium_quarterly': {
+          'title': 'Premium 3 Aylık',
+          'description': '%33 tasarruf! En avantajlı paket',
+          'price': 719.99,
+          'duration': '90 gün',
+          'features': [
+            'Sınırsız chat isteği',
+            'Check-in yapanların profillerini gör',
+            'Check-in yapmadan kişileri görebilme',
+            'Geçmiş check-in\'leri görüntüle',
+            '30 Süper Chat hakkı (Tek seferlik)'
+          ],
+        },
+
+        // Diamonds - ESKİ PAKETLER ✅
+        'diamonds_10': {
+          'title': '10 Elmas',
+          'description': 'Premium özellikler için elmas',
+          'price': 99.99,
+          'quantity': 10,
+        },
+        'diamonds_50': {
+          'title': '50 Elmas',
+          'description': 'Premium özellikler için elmas',
+          'price': 299.99,
+          'quantity': 50,
+        },
+        'diamonds_100': {
+          'title': '100 Elmas',
+          'description': 'Premium özellikler için elmas',
+          'price': 499.99,
+          'quantity': 100,
+        },
+
+        // Diamonds - YENİ PAKETLER ✨
+        'diamonds_250': {
+          'title': 'Standart - 250 Elmas',
+          'description': 'En çok tercih edilen elmas paketi',
+          'price': 1199.99,
+          'quantity': 250,
+        },
+        'diamonds_500': {
+          'title': 'Efsane - 500 Elmas',
+          'description': 'En avantajlı elmas paketi',
+          'price': 1799.99,
+          'quantity': 500,
+        },
+
+        // Super Chats 💬 Chat Request System
+        'super_chats_3': {
+          'title': '3 Super Chat',
+          'description': 'Özel mesajla öne çık ve fark yarat',
+          'price': 89.99,
+          'quantity': 3,
+          'features': [
+            '3 adet Super Chat hakkı',
+            '20 karakterlik özel mesaj',
+            'Anında dikkat çek',
+            'Match şansını artır'
+          ],
+        },
+        'super_chats_10': {
+          'title': '10 Super Chat',
+          'description': 'Daha fazla bağlantı için ideal paket',
+          'price': 264.99,
+          'quantity': 10,
+          'features': [
+            '10 adet Super Chat hakkı',
+            '20 karakterlik özel mesaj',
+            'Daha fazla match fırsatı',
+            'En popüler paket'
+          ],
+        },
+        'super_chats_25': {
+          'title': '25 Super Chat',
+          'description': 'Maximum etki için en büyük paket',
+          'price': 599.99,
+          'quantity': 25,
+          'features': [
+            '25 adet Super Chat hakkı',
+            '20 karakterlik özel mesaj',
+            'Sınırsız bağlantı imkanı',
+            'En avantajlı fiyat'
+          ],
+        },
+      };
 
   // Getters
   bool get isAvailable => _isAvailable;
@@ -181,9 +185,89 @@ class IAPService {
   List<ProductDetails> get products => _products;
   List<PurchaseDetails> get purchases => _purchases;
 
+  /// Google Play / App Store'dan çekilen gerçek fiyatı döndürür.
+  /// Ürün henüz yüklenmediyse ya da bulunamazsa fallback olarak
+  /// [productInfo] içindeki sabit fiyatı kullanır.
+  ///
+  /// [packageKey] → 'premium_weekly', 'premium_monthly', 'premium_quarterly' vb.
+  ///
+  /// Dönen değer: store'dan gelen formatlanmış string (ör. "₺95,99")
+  /// veya fallback "₺95.99"
+  String getProductPriceString(String packageKey) {
+    final storeProductId = _productIds[packageKey];
+    if (storeProductId != null) {
+      final product = _products
+          .where((p) => p.id == storeProductId)
+          .firstOrNull;
+      if (product != null) {
+        return product.price; // Store'dan gelen formatlanmış fiyat stringi
+      }
+    }
+    // Fallback: productInfo içindeki sabit değer
+    final fallbackPrice = productInfo[packageKey]?['price'] as double?;
+    if (fallbackPrice != null) {
+      return '₺${fallbackPrice.toStringAsFixed(2)}';
+    }
+    return '';
+  }
+
+  /// Google Play / App Store'dan çekilen gerçek fiyatı double olarak döndürür.
+  /// Bulunamazsa [productInfo] içindeki sabit fiyatı döndürür, o da yoksa 0.0.
+  double getProductRawPrice(String packageKey) {
+    final storeProductId = _productIds[packageKey];
+    if (storeProductId != null) {
+      final product = _products
+          .where((p) => p.id == storeProductId)
+          .firstOrNull;
+      if (product != null) {
+        return product.rawPrice;
+      }
+    }
+    return (productInfo[packageKey]?['price'] as double?) ?? 0.0;
+  }
+
+  /// Tüm ürünler için IAP fiyatlarını bir map olarak döndürür.
+  /// Key: packageKey (ör. 'premium_weekly', 'diamonds_10', 'super_chats_3')
+  /// Value: formatlanmış fiyat string (ör. "₺95,99") veya fallback "₺95.99"
+  ///
+  /// Tüm paket widget'larında tek seferlik çağrılıp state'e kaydedilebilir.
+  Map<String, String> getAllPriceStrings() {
+    final result = <String, String>{};
+    for (final key in _productIds.keys) {
+      result[key] = getProductPriceString(key);
+    }
+    return result;
+  }
+
+  /// Google Play / App Store'da bu ürün aktif mi?
+  ///
+  /// _products doluyken (IAP yüklendikten sonra) çağrılmalıdır.
+  /// _products henüz boşsa (yükleniyor / internet yok) → true döner (fallback
+  /// göster, gizleme). Böylece yükleme tamamlanmadan kart kaybolmaz.
+  ///
+  /// [packageKey] → 'diamonds_10', 'super_chats_3' vb.
+  bool isProductAvailable(String packageKey) {
+    // Ürünler henüz yüklenmediyse gizleme — kullanıcı görür, satın almada hata alır
+    if (_products.isEmpty) return true;
+    final storeProductId = _productIds[packageKey];
+    if (storeProductId == null) return false; // Bilinmeyen ürün → gizle
+    return _products.any((p) => p.id == storeProductId);
+  }
+
+  /// Belirli bir prefix'e sahip paketlerin hangilerinin aktif olduğunu döndürür.
+  /// Örnek: getAvailablePackageKeys('diamonds_') → ['diamonds_10', 'diamonds_50', ...]
+  Set<String> getAvailablePackageKeys(String prefix) {
+    if (_products.isEmpty) {
+      // Henüz yüklenmediyse hepsini göster
+      return _productIds.keys.where((k) => k.startsWith(prefix)).toSet();
+    }
+    return _productIds.keys
+        .where((k) => k.startsWith(prefix) && isProductAvailable(k))
+        .toSet();
+  }
+
   /// Initialize In-App Purchase
   Future<void> initialize() async {
-    
     try {
       final available = await _inAppPurchase.isAvailable();
       if (!available) {
@@ -195,8 +279,8 @@ class IAPService {
 
       // Platform-specific setup
       if (Platform.isIOS) {
-        final InAppPurchaseStoreKitPlatformAddition iosAddition =
-            _inAppPurchase.getPlatformAddition<InAppPurchaseStoreKitPlatformAddition>();
+        final InAppPurchaseStoreKitPlatformAddition iosAddition = _inAppPurchase
+            .getPlatformAddition<InAppPurchaseStoreKitPlatformAddition>();
         await iosAddition.setDelegate(IAPPaymentQueueDelegate());
       } else if (Platform.isAndroid) {
         // Android-specific setup
@@ -207,25 +291,23 @@ class IAPService {
       _subscription = _inAppPurchase.purchaseStream.listen(
         _handlePurchaseUpdates,
         onDone: () => _subscription.cancel(),
-        onError: (error) {
-        },
+        onError: (error) {},
       );
 
       // Clear any pending transactions FIRST (Real device için kritik)
       await _clearPendingTransactions();
-      
+
       // 🛡️ DEDUPLICATION: Service restart'ta processed purchases'ı temizle
       final oldCount = _processedPurchases.length;
       _processedPurchases.clear();
 
       // Load products
       await _loadProducts();
-      
+
       // Restore purchases - only for iOS and only for subscriptions (AFTER clearing)
       if (Platform.isIOS) {
         await _restorePurchases();
       }
-
     } catch (e) {
       _isAvailable = false;
     }
@@ -236,7 +318,7 @@ class IAPService {
     try {
       final Set<String> productIds = _productIds.values.toSet();
 
-      final ProductDetailsResponse response = 
+      final ProductDetailsResponse response =
           await _inAppPurchase.queryProductDetails(productIds);
 
       if (response.error != null) {
@@ -244,34 +326,27 @@ class IAPService {
       }
 
       _products = response.productDetails;
-      
-      for (final product in _products) {
-      }
 
-      if (response.notFoundIDs.isNotEmpty) {
-      }
-    } catch (e) {
-    }
+      for (final product in _products) {}
+
+      if (response.notFoundIDs.isNotEmpty) {}
+    } catch (e) {}
   }
 
   /// Restore purchases (for subscriptions) - PUBLIC METHOD for Guideline 3.1.1
   /// Returns the number of items restored
+  /// Works on both iOS and Android
   Future<int> restorePurchases() async {
     try {
-      
-      // iOS için restore purchases
-      if (Platform.isIOS) {
-        // Restore edilen ürün sayısını takip et
-        _restoredItemsCount = 0;
-        await _inAppPurchase.restorePurchases();
-        
-        // Stream'den gelen restore işlemlerinin tamamlanması için kısa bir bekleme
-        await Future.delayed(const Duration(milliseconds: 1500));
-        
-        return _restoredItemsCount;
-      } else {
-        return 0;
-      }
+      // Restore edilen ürün sayısını takip et
+      _restoredItemsCount = 0;
+      await _inAppPurchase.restorePurchases();
+
+      // Stream'den gelen restore işlemlerinin tamamlanması için kısa bir bekleme
+      // Android biraz daha uzun sürebilir
+      await Future.delayed(Duration(milliseconds: Platform.isIOS ? 1500 : 2000));
+
+      return _restoredItemsCount;
     } catch (e) {
       rethrow; // Hatayı UI'a bildir
     }
@@ -280,11 +355,9 @@ class IAPService {
   /// Restore purchases (for subscriptions) - INTERNAL
   Future<void> _restorePurchases() async {
     try {
-      
-      // iOS için restore purchases
-      if (Platform.isIOS) {
+      // iOS ve Android için restore purchases
+      if (Platform.isIOS || Platform.isAndroid) {
         await _inAppPurchase.restorePurchases();
-      } else {
       }
     } catch (e) {
       // Restore hatası önemli değil, devam et
@@ -294,43 +367,43 @@ class IAPService {
   /// Android-specific setup for In-App Purchases
   Future<void> _setupAndroidSpecific() async {
     try {
-      
       // Android'de pending purchases'ları temizle (kritik)
       await _clearAndroidPendingPurchases();
-      
     } catch (e) {
       // Bu hata kritik değil, devam et
     }
   }
 
   /// Clear pending purchases specifically for Android
+  /// App başlarken veya buyProduct öncesi çağrılır.
+  /// Google Play'de askıda kalan transaction'ları kapatır.
   Future<void> _clearAndroidPendingPurchases() async {
     try {
-      
-      // Android'de pending purchase'ları otomatik handle et
+      // restorePurchases() ile Play Store'daki mevcut purchase stream'ini tetikle.
+      // _handlePurchaseUpdates içinde her pendingCompletePurchase=true olan
+      // purchase artık completePurchase ile kapatılıyor (yukarıdaki kritik fix).
+      // Bu sayede "already pending" durumu temizlenir.
       await _inAppPurchase.restorePurchases();
-      
-      // Mevcut pending transactions kontrol et
-      
     } catch (e) {
+      // Bu hata kritik değil, devam et
     }
   }
 
   /// Clear pending transactions (for duplicate issue resolution)
   Future<void> _clearPendingTransactions() async {
     try {
-      
       if (Platform.isIOS) {
         // iOS'ta pending transactions'ları otomatik temizle
         // Mevcut pending transactions'ları al ve complete et
         final transactions = await SKPaymentQueueWrapper().transactions();
         for (final transaction in transactions) {
-          if (transaction.transactionState == SKPaymentTransactionStateWrapper.failed ||
-              transaction.transactionState == SKPaymentTransactionStateWrapper.purchasing) {
+          if (transaction.transactionState ==
+                  SKPaymentTransactionStateWrapper.failed ||
+              transaction.transactionState ==
+                  SKPaymentTransactionStateWrapper.purchasing) {
             await SKPaymentQueueWrapper().finishTransaction(transaction);
           }
         }
-        
       }
     } catch (e) {
       // Bu hata kritik değil, devam et
@@ -339,15 +412,16 @@ class IAPService {
 
   /// Handle purchase updates
   void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
-    
     for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
-      
       if (purchaseDetails.status == PurchaseStatus.pending) {
+        // PENDING: Kullanıcı onay bekleniyor (örn. "biraz sonra kabul edilir" test kartı)
+        // _purchasePending = true yaparız ama KAPATMAYIZ — Google Play bizi callback ile bilgilendirecek
         _purchasePending = true;
       } else {
         _purchasePending = false;
         _isPurchaseInProgress = false; // 🛡️ Purchase tamamlandı - spam koruması reset
-        
+        _cancelPurchaseTimeout(); // Timeout'u her zaman iptal et
+
         if (purchaseDetails.status == PurchaseStatus.error) {
           _handlePurchaseError(purchaseDetails);
         } else if (purchaseDetails.status == PurchaseStatus.purchased) {
@@ -355,17 +429,15 @@ class IAPService {
         } else if (purchaseDetails.status == PurchaseStatus.restored) {
           _handlePurchaseRestore(purchaseDetails);
         } else if (purchaseDetails.status == PurchaseStatus.canceled) {
-          
-          // 🆕 UI Canceled Callback çağır - ALWAYS call reset callbacks
           _onPurchaseError?.call('Satın alma iptal edildi');
           _resetCallbacks();
         }
       }
 
-      // Complete the purchase - SADECE başarılı veya restored purchases için
-      if (purchaseDetails.pendingCompletePurchase && 
-          (purchaseDetails.status == PurchaseStatus.purchased || 
-           purchaseDetails.status == PurchaseStatus.restored)) {
+      // ✅ CRITICAL FIX: pendingCompletePurchase olan HER durumda completePurchase çağır.
+      // Sadece purchased/restored değil — error ve canceled için de çağrılmazsa
+      // Google Play transaction'ı "açık" bırakır ve "already pending" hatası oluşur.
+      if (purchaseDetails.pendingCompletePurchase) {
         _inAppPurchase.completePurchase(purchaseDetails);
       }
     }
@@ -380,7 +452,8 @@ class IAPService {
       }
 
       // 🛡️ DEDUPLICATION: Purchase ID ile duplikasyon kontrolü
-      final purchaseKey = '${purchaseDetails.purchaseID}_${purchaseDetails.productID}';
+      final purchaseKey =
+          '${purchaseDetails.purchaseID}_${purchaseDetails.productID}';
       if (_processedPurchases.contains(purchaseKey)) {
         return;
       }
@@ -388,42 +461,68 @@ class IAPService {
       // Purchase'ı processed listesine ekle
       _processedPurchases.add(purchaseKey);
 
+      // �️ SUNUCU TARAFLI DOĞRULAMA (sadece Android)
+      if (Platform.isAndroid) {
+        final isValid = await _verifyPurchaseWithServer(purchaseDetails);
+        if (!isValid) {
+          _processedPurchases.remove(purchaseKey);
+          throw Exception(
+            'Satın alma sunucu tarafından doğrulanamadı. '
+            'İşlem ID: ${purchaseDetails.purchaseID}',
+          );
+        }
+      }
 
       // 🚨 ATOMIC: Apply benefits (otomatik rollback ile)
+      debugPrint('[IAP] _applyPurchaseBenefits başlıyor: ${purchaseDetails.productID}');
       await _applyPurchaseBenefits(user.uid, purchaseDetails);
+      debugPrint('[IAP] _applyPurchaseBenefits tamamlandı ✅');
 
       // 🚨 ATOMIC: Record purchase (benefits başarılıysa kaydet)
       await _recordPurchase(user.uid, purchaseDetails);
+      debugPrint('[IAP] _recordPurchase tamamlandı ✅');
 
-      
       // Verify the benefits were applied
       await _verifyBenefitsApplied(user.uid, purchaseDetails.productID);
-      
+
       // 🆕 UI Callback çağır
-      if (_currentPurchaseProductId == purchaseDetails.productID) {
+      // _currentPurchaseProductId == productID: normal akış
+      // _currentPurchaseProductId != null ama farklı ID: başka ürün, callback tetikleme
+      // _currentPurchaseProductId == null: timeout sonrası geldi, yine de callback çağır
+      debugPrint('[IAP] onSuccess kontrol: currentId=$_currentPurchaseProductId, purchaseId=${purchaseDetails.productID}, hasCallback=${_onPurchaseSuccess != null}');
+      if (_currentPurchaseProductId == null ||
+          _currentPurchaseProductId == purchaseDetails.productID) {
+        debugPrint('[IAP] onPurchaseSuccess çağrılıyor...');
         _onPurchaseSuccess?.call();
+        debugPrint('[IAP] onPurchaseSuccess çağrıldı ✅');
         _resetCallbacks();
+      } else {
+        debugPrint('[IAP] onSuccess ATLANDI — ID eşleşmedi');
       }
-      
     } catch (e) {
-      
       // 🚨 CRITICAL ERROR: Para çekildi ama benefit uygulanamadı
       // Bu durumda user'a özel mesaj ver ve support'a yönlendir
-      
+      debugPrint('[IAP] _handlePurchaseSuccess ERROR: $e');
+
       // 🆕 UI Error Callback çağır
-      if (_currentPurchaseProductId == purchaseDetails.productID) {
-        final criticalError = 'Satın alma tamamlandı ancak hesabınıza yansıtılamadı. '
-                              'Lütfen müşteri hizmetleriyle iletişime geçin. '
-                              'İşlem ID: ${purchaseDetails.purchaseID}';
+      // NOT: _currentPurchaseProductId == null ise timeout sonrası geldi —
+      // yine de error callback'i çağır ki spinner kapansın (siyah ekran olmasın)
+      if (_currentPurchaseProductId == null ||
+          _currentPurchaseProductId == purchaseDetails.productID) {
+        final criticalError =
+            'Satın alma tamamlandı ancak hesabınıza yansıtılamadı. '
+            'Lütfen müşteri hizmetleriyle iletişime geçin. '
+            'İşlem ID: ${purchaseDetails.purchaseID}';
         _onPurchaseError?.call(criticalError);
         _resetCallbacks();
       }
-      
+
       // 🚨 Log critical error for monitoring
       await _logCriticalError(purchaseDetails, e);
-      
+
       // 🛡️ DEDUPLICATION: Error durumunda purchase'ı processed listesinden çıkar
-      final purchaseKey = '${purchaseDetails.purchaseID}_${purchaseDetails.productID}';
+      final purchaseKey =
+          '${purchaseDetails.purchaseID}_${purchaseDetails.productID}';
       _processedPurchases.remove(purchaseKey);
     }
   }
@@ -431,7 +530,6 @@ class IAPService {
   /// Handle restored purchase (iOS) - RESTORE BENEFITS ✅
   Future<void> _handlePurchaseRestore(PurchaseDetails purchaseDetails) async {
     try {
-      
       final user = _auth.currentUser;
       if (user == null) {
         return;
@@ -439,9 +537,8 @@ class IAPService {
 
       // ✅ RESTORE: Check if subscription is still active and restore benefits
       final isActive = await _checkSubscriptionActive(purchaseDetails);
-      
+
       if (isActive) {
-        
         // Determine subscription type from productId
         if (purchaseDetails.productID.contains('premium')) {
           // Premium subscription restore
@@ -452,12 +549,44 @@ class IAPService {
           await _restoreConsumableProduct(user.uid, purchaseDetails);
           _restoredItemsCount++; // Restore edilen ürün sayısını artır
         }
-        
-      } else {
-      }
-      
+      } else {}
     } catch (e) {
       // Restore hatası kritik değil, sessizce devam et
+    }
+  }
+
+  /// 🛡️ Server-side purchase verification via Cloud Function (Android only)
+  Future<bool> _verifyPurchaseWithServer(PurchaseDetails purchaseDetails) async {
+    try {
+      final token = purchaseDetails.verificationData.serverVerificationData;
+      if (token.isEmpty) {
+        debugPrint('⚠️ serverVerificationData boş, doğrulama atlanıyor');
+        return true; // Token yoksa geç (test ortamı gibi durumlar)
+      }
+
+      final purchaseType = purchaseDetails.productID.contains('premium')
+          ? 'subscription'
+          : 'product';
+
+      final callable = FirebaseFunctions.instance
+          .httpsCallable('verifyGooglePlayPurchase');
+
+      final result = await callable.call({
+        'purchaseToken': token,
+        'productId': purchaseDetails.productID,
+        'purchaseType': purchaseType,
+      });
+
+      final isValid = result.data['valid'] == true;
+      final reason = result.data['reason'] ?? '';
+
+      debugPrint('🛡️ Purchase doğrulama sonucu: isValid=$isValid, reason=$reason');
+
+      return isValid;
+    } catch (e) {
+      // Ağ hatası veya Cloud Function hatası durumunda satın almayı geçersiz say
+      debugPrint('❌ Purchase doğrulama hatası: $e');
+      return false;
     }
   }
 
@@ -474,7 +603,7 @@ class IAPService {
 
       final data = userDoc.data()!;
       final isPremium = data['isPremium'] ?? false;
-      
+
       // ✅ FIXED: Use premiumUntil instead of premiumExpiryDate (consistent with codebase)
       final expiryDate = data['premiumUntil'] as Timestamp?;
 
@@ -490,7 +619,8 @@ class IAPService {
 
   /// Restore premium subscription benefits
   /// ⚠️ IMPORTANT: Restore does NOT add new time, only verifies existing subscription
-  Future<void> _restorePremiumSubscription(String userId, PurchaseDetails purchaseDetails) async {
+  Future<void> _restorePremiumSubscription(
+      String userId, PurchaseDetails purchaseDetails) async {
     try {
       // 🔍 Get current user premium status
       final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -504,11 +634,11 @@ class IAPService {
       await _firestore.collection('users').doc(userId).update({
         'isPremium': true, // Confirm premium status
         'premiumRestoredAt': FieldValue.serverTimestamp(), // Log restore time
-        'lastPremiumRestoreProductId': purchaseDetails.productID, // Track product
+        'lastPremiumRestoreProductId':
+            purchaseDetails.productID, // Track product
         // ⚠️ IMPORTANT: premiumUntil is NOT modified here
         // It keeps the original expiry date from the actual purchase
       });
-
     } catch (e) {
       rethrow;
     }
@@ -516,9 +646,9 @@ class IAPService {
 
   /// Restore consumable products (Super Chats, Diamonds)
   /// ⚠️ IMPORTANT: Each purchase can only be restored once per user (duplicate prevention)
-  Future<void> _restoreConsumableProduct(String userId, PurchaseDetails purchaseDetails) async {
+  Future<void> _restoreConsumableProduct(
+      String userId, PurchaseDetails purchaseDetails) async {
     try {
-      
       // ✅ DUPLICATE PREVENTION: Check if already restored to prevent duplicates
       final existingRestore = await _firestore
           .collection('restored_purchases')
@@ -530,7 +660,6 @@ class IAPService {
       if (existingRestore.docs.isNotEmpty) {
         return; // ❌ 2nd restore attempt blocked
       }
-
 
       // Add benefits based on product type
       if (purchaseDetails.productID.contains('superchat')) {
@@ -552,7 +681,6 @@ class IAPService {
         'productId': purchaseDetails.productID,
         'restoredAt': FieldValue.serverTimestamp(),
       });
-
     } catch (e) {
       rethrow;
     }
@@ -568,7 +696,7 @@ class IAPService {
         break;
       }
     }
-    
+
     // productInfo'dan quantity'yi al
     if (internalId != null && productInfo.containsKey(internalId)) {
       final info = productInfo[internalId];
@@ -576,7 +704,7 @@ class IAPService {
         return info['quantity'] as int;
       }
     }
-    
+
     // Fallback: product ID'den parse et
     final parts = productId.split('_');
     if (parts.length >= 2) {
@@ -588,81 +716,76 @@ class IAPService {
   /// Verify that benefits were actually applied
   Future<void> _verifyBenefitsApplied(String userId, String productId) async {
     try {
-      
       final userDoc = await _firestore.collection('users').doc(userId).get();
       if (userDoc.exists) {
         final data = userDoc.data()!;
-        
+
         if (productId.contains('premium')) {
           final isPremium = data['isPremium'] ?? false;
           final premiumUntil = data['premiumUntil'] as Timestamp?;
-        } else if (productId.contains('diamonds') || productId.contains('diamond')) {
-          // Diamond balans alanı uygulamada 'balance' olarak tutuluyor; eski alanı da fallback olarak kontrol et
-          final balance = data['balance'] ?? data['diamonds'] ?? 0;
-        } else if (productId.contains('superchats') || productId.contains('super_chat')) {
+        } else if (productId.contains('diamonds') ||
+            productId.contains('diamond')) {
+          // Diamond balance alanı 'diamonds' olarak tutuluyor
+          final balance = data['diamonds'] ?? 0;
+        } else if (productId.contains('superchats') ||
+            productId.contains('super_chat')) {
           // Satın alınan super chat'ler 'superChatsRemaining' alanında birikir
           final purchased = data['superChatsRemaining'] ?? 0;
-          
+
           // 🛡️ Type safety check
-          final safePurchased = (purchased is double) ? purchased.toInt() : purchased as int;
-          
+          final safePurchased =
+              (purchased is double) ? purchased.toInt() : purchased as int;
+
           // 🔍 Additional integrity check
-          if (safePurchased < 0) {
-          }
+          if (safePurchased < 0) {}
         }
-      } else {
-      }
-    } catch (e) {
-    }
+      } else {}
+    } catch (e) {}
   }
 
   /// Handle purchase error
   void _handlePurchaseError(PurchaseDetails purchaseDetails) {
     final error = purchaseDetails.error;
-    
+
     // 🛡️ CRITICAL: ALWAYS reset loading states first, regardless of error type
     _purchasePending = false;
     _isPurchaseInProgress = false;
-    
+
     // iOS specific error handling - Güvenli casting
     if (Platform.isIOS && error?.details != null) {
       try {
         final details = error!.details;
         if (details is Map) {
           final detailsMap = Map<String, dynamic>.from(details);
-          if (detailsMap.containsKey('NSLocalizedDescription')) {
-          }
-          if (detailsMap.containsKey('NSUnderlyingError')) {
-          }
+          if (detailsMap.containsKey('NSLocalizedDescription')) {}
+          if (detailsMap.containsKey('NSUnderlyingError')) {}
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }
-    
-    // Android specific error handling 
+
+    // Android specific error handling
     if (Platform.isAndroid && error?.details != null) {
       try {
         final details = error!.details.toString();
-        
-        if (details.contains('BillingResponse.developerError') || error.code == 'purchase_error') {
-          
+
+        if (details.contains('BillingResponse.developerError') ||
+            error.code == 'purchase_error') {
           // Kullanıcıya daha anlaşılır mesaj
           if (_currentPurchaseProductId == purchaseDetails.productID) {
-            const friendlyMessage = 'Debug modu hatası: Release build gerekli veya Play Console test gerekli. '
-                                  'Detaylar için debug log\'a bakın.';
+            const friendlyMessage =
+                'Debug modu hatası: Release build gerekli veya Play Console test gerekli. '
+                'Detaylar için debug log\'a bakın.';
             _onPurchaseError?.call(friendlyMessage);
             _resetCallbacks();
           }
           return;
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }
-    
+
     // Specific error code handling
-    if (error?.code == 'purchase_error') {
-    }
-    
+    if (error?.code == 'purchase_error') {}
+
     // 🆕 UI Error Callback çağır - ALWAYS call this for ANY error
     String errorMessage = 'Satın alma başarısız';
     if (error?.code == 'user_cancelled') {
@@ -674,17 +797,22 @@ class IAPService {
     // 🤖 Android özel: billingUnavailable için net mesaj
     if (Platform.isAndroid) {
       final msg = (error?.message ?? '').toLowerCase();
-      if (msg.contains('billingUnavailable') || msg.contains('billing_unavailable')) {
-        errorMessage = 'Google Play faturalandırma servis geçici olarak kullanılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.';
-      } else if (msg.contains('itemAlreadyOwned') || msg.contains('item_already_owned')) {
-        errorMessage = 'Bu ürün zaten satın alınmış. Premium özellikleriniz aktif olmalı.';
+      if (msg.contains('billingUnavailable') ||
+          msg.contains('billing_unavailable')) {
+        errorMessage =
+            'Google Play faturalandırma servis geçici olarak kullanılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.';
+      } else if (msg.contains('itemAlreadyOwned') ||
+          msg.contains('item_already_owned')) {
+        errorMessage =
+            'Bu ürün zaten satın alınmış. Premium özellikleriniz aktif olmalı.';
       } else if (msg.contains('developer_error') ||
           msg.contains('responsecode: 5') ||
           msg.contains('billingresponsecode: 5')) {
-        errorMessage = 'Google Play ödeme yapılandırması uygun değil. Uygulamayı Play kapalı test bağlantısından yükleyin, tester hesabınızla giriş yapın ve Play Store önbelleğini temizleyip tekrar deneyin.';
+        errorMessage =
+            'Google Play ödeme yapılandırması uygun değil. Uygulamayı Play kapalı test bağlantısından yükleyin, tester hesabınızla giriş yapın ve Play Store önbelleğini temizleyip tekrar deneyin.';
       }
     }
-    
+
     _onPurchaseError?.call(errorMessage);
     _resetCallbacks();
   }
@@ -693,6 +821,7 @@ class IAPService {
   void _resetCallbacks() {
     _onPurchaseSuccess = null;
     _onPurchaseError = null;
+    _onPurchasePendingTimeout = null;
     _currentPurchaseProductId = null;
     _isPurchaseInProgress = false; // 🛡️ Spam koruması da reset
     _cancelPurchaseTimeout(); // 🛡️ Timeout cancel
@@ -701,24 +830,45 @@ class IAPService {
   /// 🛡️ Purchase timeout başlat
   void _startPurchaseTimeout() {
     _cancelPurchaseTimeout(); // Önceki timeout'u iptal et
-    
-    _purchaseTimeout = Timer(const Duration(seconds: 30), () { // ✅ OPTIMIZED: 45 → 30 saniye
-      if (_isPurchaseInProgress) {
-        
-        // Force reset all states
+
+    _purchaseTimeout = Timer(const Duration(seconds: 30), () {
+      if (!_isPurchaseInProgress) return;
+
+      if (_purchasePending) {
+        // ─────────────────────────────────────────────────────────────────
+        // PENDING durumu: Google Play ödemeyi henüz onaylamadı (örn.
+        // "biraz sonra kabul edilir" test kartı). Bu normal bir durum —
+        // HATA gösterme. Sadece spinner'ı kapat, success/error callback'leri
+        // CANLI tut. Google Play onayladığında _handlePurchaseSuccess devreye
+        // girer ve bakiye + UI güncellemesi doğru şekilde yapılır.
+        // ─────────────────────────────────────────────────────────────────
+        _isPurchaseInProgress = false;
+        // _onPurchaseSuccess ve _onPurchaseError'ı NULL YAPMA —
+        // Google Play'den cevap gelince çalışsın
+        _onPurchasePendingTimeout?.call(); // ← IAPPaymentButton spinner'ı kapatır
+        _onPurchasePendingTimeout = null;
+        debugPrint('[IAP] Timeout: purchase still PENDING — keeping callbacks alive, hiding spinner');
+      } else {
+        // ─────────────────────────────────────────────────────────────────
+        // PENDING değil ama hâlâ inProgress: gerçek bir takılma.
+        // State'i sıfırla ve kullanıcıya hata bildir.
+        // ─────────────────────────────────────────────────────────────────
         _purchasePending = false;
         _isPurchaseInProgress = false;
-        
-        // 🛡️ DEDUPLICATION: Timeout durumunda processed purchases'ı temizle
-        final oldCount = _processedPurchases.length;
         _processedPurchases.clear();
-        
-        const errorMessage = 'Satın alma zaman aşımına uğradı. Lütfen tekrar deneyin.';
+
+        // Google Play'deki açık transaction'ları temizle
+        try {
+          _inAppPurchase.restorePurchases();
+        } catch (_) {}
+
+        const errorMessage =
+            'Satın alma zaman aşımına uğradı. Lütfen tekrar deneyin.';
         _onPurchaseError?.call(errorMessage);
         _resetCallbacks();
+        debugPrint('[IAP] Timeout: purchase stuck (non-pending) — reset & error shown');
       }
     });
-    
   }
 
   /// 🛡️ Purchase timeout iptal et
@@ -728,7 +878,8 @@ class IAPService {
   }
 
   /// Apply purchase benefits to user account - ATOMIC TRANSACTION
-  Future<void> _applyPurchaseBenefits(String userId, PurchaseDetails purchaseDetails) async {
+  Future<void> _applyPurchaseBenefits(
+      String userId, PurchaseDetails purchaseDetails) async {
     final productId = purchaseDetails.productID;
     final userRef = _firestore.collection('users').doc(userId);
 
@@ -745,13 +896,35 @@ class IAPService {
       throw Exception('Unknown product ID: $productId');
     }
 
-    
     // Android premium özel debug
-    if (Platform.isAndroid && internalProductId.startsWith('premium_')) {
-    }
+    if (Platform.isAndroid && internalProductId.startsWith('premium_')) {}
 
     // 🚨 ATOMIC TRANSACTION - All benefits applied together or none
     try {
+      // 🛡️ FIRESTORE DEDUPLICATION: purchaseId daha önce işlendi mi?
+      // Bu kontrol uygulama restart sonrası (örn. PENDING → onaylandı) tekrar
+      // benefit uygulanmasını engeller. Query hata verirse devam et (izin sorununa karşı).
+      final purchaseId = purchaseDetails.purchaseID;
+      if (purchaseId != null && purchaseId.isNotEmpty) {
+        try {
+          final existing = await _firestore
+              .collection('purchases')
+              .where('purchaseId', isEqualTo: purchaseId)
+              .where('userId', isEqualTo: userId)
+              .where('status', isEqualTo: 'completed')
+              .limit(1)
+              .get();
+          if (existing.docs.isNotEmpty) {
+            debugPrint('[IAP] Duplicate purchase ignored (already in Firestore): $purchaseId');
+            return; // Zaten işlendi, tekrar benefit ekleme
+          }
+        } catch (queryError) {
+          // Query izni yoksa veya başka hata → duplicate check atla, benefit uygula
+          // (En kötü ihtimal: çift benefit, ama kullanıcı mahsur kalmaz)
+          debugPrint('[IAP] Duplicate check failed (skipping): $queryError');
+        }
+      }
+
       await _firestore.runTransaction((transaction) async {
         // İlk önce user document'ini oku
         final userDoc = await transaction.get(userRef);
@@ -765,13 +938,16 @@ class IAPService {
         // Product tipine göre benefit'leri hazırla
         switch (internalProductId!) {
           case 'premium_weekly':
-            _preparePremiumUpdates(updates, userData, 'weekly', 7, 3); // 3 süper chat
+            _preparePremiumUpdates(
+                updates, userData, 'weekly', 7, 3); // 3 süper chat
             break;
           case 'premium_monthly':
-            _preparePremiumUpdates(updates, userData, 'monthly', 30, 10); // 10 süper chat
+            _preparePremiumUpdates(
+                updates, userData, 'monthly', 30, 10); // 10 süper chat
             break;
           case 'premium_quarterly':
-            _preparePremiumUpdates(updates, userData, 'quarterly', 90, 30); // 30 süper chat
+            _preparePremiumUpdates(
+                updates, userData, 'quarterly', 90, 30); // 30 süper chat
             break;
           case 'super_chats_3': // 💬 Super Chat IAP
             _prepareSuperChatUpdates(updates, userData, 3);
@@ -804,78 +980,87 @@ class IAPService {
         }
 
         // Android premium özel debug
-        if (Platform.isAndroid && internalProductId.startsWith('premium_')) {
-        }
+        if (Platform.isAndroid && internalProductId.startsWith('premium_')) {}
 
         // 🔥 ATOMIC UPDATE - Tek transaction'da tüm değişiklikler
         for (final entry in updates.entries) {
           if (entry.value is FieldValue) {
-          } else {
-          }
+          } else {}
         }
-        
+
         transaction.update(userRef, updates);
-        
-        
+
         // Android premium özel debug
-        if (Platform.isAndroid && internalProductId.startsWith('premium_')) {
-        }
+        if (Platform.isAndroid && internalProductId.startsWith('premium_')) {}
       });
 
-      
       // Android premium özel success debug
-      if (Platform.isAndroid && internalProductId.startsWith('premium_')) {
-      }
-      
+      if (Platform.isAndroid && internalProductId.startsWith('premium_')) {}
     } catch (e) {
-      
       // Android premium özel error debug
-      if (Platform.isAndroid && internalProductId.startsWith('premium_')) {
-      }
-      
+      if (Platform.isAndroid && internalProductId.startsWith('premium_')) {}
+
       // Transaction otomatik olarak rollback oldu
       throw Exception('Benefits application failed: $e');
     }
   }
 
   /// Prepare premium benefits for atomic transaction
-  void _preparePremiumUpdates(Map<String, dynamic> updates, Map<String, dynamic> userData, String type, int days, int superChatCount) {
+  void _preparePremiumUpdates(
+      Map<String, dynamic> updates,
+      Map<String, dynamic> userData,
+      String type,
+      int days,
+      int superChatCount) {
     final now = DateTime.now();
-    final expiryDate = now.add(Duration(days: days));
+
+    // ✅ UZATMA MANTIĞI: Aktif premium varsa bitiş tarihine ekle, yoksa şimdiden başlat
+    DateTime startPoint = now;
+    final existingPremiumUntil = userData['premiumUntil'];
+    if (existingPremiumUntil != null && existingPremiumUntil is Timestamp) {
+      final existingExpiry = existingPremiumUntil.toDate();
+      if (existingExpiry.isAfter(now)) {
+        startPoint = existingExpiry; // Mevcut premium bitmeden önce uzat
+      }
+    }
+    final expiryDate = startPoint.add(Duration(days: days));
 
     updates.addAll({
       'isPremium': true,
       'premiumType': type,
       'premiumUntil': Timestamp.fromDate(expiryDate),
       'dailyChatRequestsRemaining': 999, // Sınırsız chat request
-      'superChatsRemaining': FieldValue.increment(superChatCount), // 💬 Süper Chat hakkı (tek seferlik)
+      'superChatsRemaining': FieldValue.increment(
+          superChatCount), // 💬 Süper Chat hakkı (tek seferlik)
       'updatedAt': FieldValue.serverTimestamp(),
     });
-
   }
 
   /// 💬 Prepare Super Chat benefits for atomic transaction - Chat Request System
-  void _prepareSuperChatUpdates(Map<String, dynamic> updates, Map<String, dynamic> userData, int count) {
-    
+  void _prepareSuperChatUpdates(
+      Map<String, dynamic> updates, Map<String, dynamic> userData, int count) {
     updates.addAll({
-      'superChatsRemaining': FieldValue.increment(count), // 💬 Satın alınan super chat'ler
+      'superChatsRemaining':
+          FieldValue.increment(count), // 💬 Satın alınan super chat'ler
       'lastSuperChatPurchase': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-
   }
 
   /// Prepare diamond benefits for atomic transaction
-  void _prepareDiamondUpdates(Map<String, dynamic> updates, Map<String, dynamic> userData, int count) {
+  void _prepareDiamondUpdates(
+      Map<String, dynamic> updates, Map<String, dynamic> userData, int count) {
     updates.addAll({
-      'balance': FieldValue.increment(count), // 💎 Elmas bakiyesi
+      'diamonds': FieldValue.increment(count), // 💎 Elmas bakiyesi
+      'diamondCount': FieldValue.increment(count), // Backup field
+      'totalDiamondsEarned': FieldValue.increment(count), // Toplam kazanılan
       'updatedAt': FieldValue.serverTimestamp(),
     });
-
   }
 
   /// Log critical error for monitoring
-  Future<void> _logCriticalError(PurchaseDetails purchaseDetails, dynamic error) async {
+  Future<void> _logCriticalError(
+      PurchaseDetails purchaseDetails, dynamic error) async {
     try {
       await _firestore.collection('critical_errors').add({
         'type': 'iap_benefit_application_failed',
@@ -888,27 +1073,36 @@ class IAPService {
         'platform': Platform.isIOS ? 'ios' : 'android',
         'needsManualReview': true,
       });
-      
     } catch (e) {
       // En azından console'da görelim
     }
   }
 
   /// Record purchase in Firestore
-  Future<void> _recordPurchase(String userId, PurchaseDetails purchaseDetails) async {
-    await _firestore.collection('purchases').add({
+  Future<void> _recordPurchase(
+      String userId, PurchaseDetails purchaseDetails) async {
+    // 🛡️ purchaseId'yi document ID olarak kullan → çift kayıt imkânsız (idempotent)
+    final purchaseId = purchaseDetails.purchaseID ?? 
+        '${userId}_${purchaseDetails.productID}_${DateTime.now().millisecondsSinceEpoch}';
+    
+    await _firestore.collection('purchases').doc(purchaseId).set({
       'userId': userId,
       'productId': purchaseDetails.productID,
-      'purchaseId': purchaseDetails.purchaseID,
+      'purchaseId': purchaseId,
       'transactionDate': purchaseDetails.transactionDate != null
           ? Timestamp.fromMillisecondsSinceEpoch(
               int.parse(purchaseDetails.transactionDate!))
           : FieldValue.serverTimestamp(),
       'source': Platform.isIOS ? 'ios_appstore' : 'android_playstore',
+      'platform': Platform.isIOS ? 'ios' : 'android',
       'status': 'completed',
-      'verificationData': purchaseDetails.verificationData.source,
+      // 🔔 RTDN eşleştirmesi için purchaseToken sakla (Android)
+      'verificationData': purchaseDetails.verificationData.serverVerificationData,
+      // serverVerificationData = Google Play purchase token (Android) / receipt (iOS)
+      // Bu RTDN webhook'tan gelen token ile eşleştirilecek
       'createdAt': FieldValue.serverTimestamp(),
-    });
+      'timestamp': FieldValue.serverTimestamp(), // Dashboard uyumluluğu için
+    }, SetOptions(merge: false)); // merge:false → zaten varsa hata vermez, sadece yazar
   }
 
   /// Buy product
@@ -916,10 +1110,14 @@ class IAPService {
     String internalProductId, {
     VoidCallback? onSuccess,
     ValueChanged<String>? onError,
+    /// PENDING timeout'unda çağrılır — spinner'ı kapatmak için kullan.
+    /// Bakiye güncellemesi daha sonra (Google Play onayladığında) gelir.
+    VoidCallback? onPendingTimeout,
   }) async {
     // 🛡️ SPAM KORUMASI - Zaten bir işlem devam ediyorsa engelle
     if (_isPurchaseInProgress) {
-      onError?.call('Zaten bir satın alma işlemi devam ediyor. Lütfen bekleyin.');
+      onError
+          ?.call('Zaten bir satın alma işlemi devam ediyor. Lütfen bekleyin.');
       return false;
     }
 
@@ -943,8 +1141,22 @@ class IAPService {
     }
 
     if (_purchasePending) {
-      onError?.call('Zaten bekleyen bir satın alma var');
-      return false;
+      // ✅ STUCK PURCHASE FIX: "Zaten bekleyen var" durumunda bloklama yapma,
+      // önce pending state'i sıfırlamayı dene (restore ile tüm açık
+      // transaction'ları completePurchase ile kapatır).
+      // Eğer bu çalışmazsa kullanıcıya bilgi ver.
+      debugPrint('[IAP] Pending purchase detected — attempting auto-clear...');
+      try {
+        await _inAppPurchase.restorePurchases();
+        // Stream callback'lerinin işlenmesi için kısa bekle
+        await Future.delayed(const Duration(milliseconds: 800));
+      } catch (_) {}
+      // Hâlâ pending ise sert sıfırla (Google Play'den cevap gelmedi demektir)
+      if (_purchasePending) {
+        _purchasePending = false;
+        _isPurchaseInProgress = false;
+        debugPrint('[IAP] Force-reset pending state after failed auto-clear');
+      }
     }
 
     final storeProductId = _productIds[internalProductId];
@@ -953,9 +1165,8 @@ class IAPService {
       return false;
     }
 
-    ProductDetails? productDetails = _products
-        .where((product) => product.id == storeProductId)
-        .firstOrNull;
+    ProductDetails? productDetails =
+        _products.where((product) => product.id == storeProductId).firstOrNull;
 
     // 🔎 On-demand fetch: initialize erken/başarısız olduysa tek ürün detayını çekmeyi dene
     if (productDetails == null) {
@@ -978,25 +1189,25 @@ class IAPService {
     try {
       // 🛡️ Purchase işlemini başlat - spam koruması aktif
       _isPurchaseInProgress = true;
-      
+
       // 🛡️ Purchase timeout başlat (30 saniye)
       _startPurchaseTimeout();
-      
+
       // 🆕 Real device için pending transactions'ları temizle
       await _clearPendingTransactions();
-      
+
       // 🆕 UI Callback'leri set et
       _onPurchaseSuccess = onSuccess;
       _onPurchaseError = onError;
+      _onPurchasePendingTimeout = onPendingTimeout;
       _currentPurchaseProductId = storeProductId;
-      
+
       _purchasePending = true;
-      
+
       // Subscription veya consumable product kontrolü
       bool isSubscription = internalProductId.startsWith('premium_');
 
       if (isSubscription) {
-
         // Android: Google Play için özel param kullan (plugin mevcut base plan seçimini handle eder)
         if (Platform.isAndroid) {
           final gpParam = GooglePlayPurchaseParam(
@@ -1018,33 +1229,33 @@ class IAPService {
       _purchasePending = false;
       _isPurchaseInProgress = false; // 🛡️ Spam koruması reset
       _resetCallbacks();
-      
+
       // Specific error handling for real device issues
       final errorString = e.toString().toLowerCase();
-      
-      if (errorString.contains('storekit_duplicate_product_object') || 
+
+      if (errorString.contains('storekit_duplicate_product_object') ||
           errorString.contains('duplicate')) {
-        
         // Clear pending transactions otomatik olarak
         await _clearPendingTransactions();
-        
+
         // User'a bilgi ver ama error olarak değil, info olarak
         onError?.call('Satın alma işlemi devam ediyor. Lütfen bekleyin.');
         return false; // UI'da retry göster
       }
-      
-      if (errorString.contains('payment_not_available') || 
+
+      if (errorString.contains('payment_not_available') ||
           errorString.contains('store_kit_error')) {
-        onError?.call('Ödeme sistemi geçici olarak kullanılamıyor. Lütfen tekrar deneyin.');
+        onError?.call(
+            'Ödeme sistemi geçici olarak kullanılamıyor. Lütfen tekrar deneyin.');
         return false;
       }
-      
-      if (errorString.contains('user_cancelled') || 
+
+      if (errorString.contains('user_cancelled') ||
           errorString.contains('cancelled')) {
         onError?.call('Satın alma iptal edildi');
         return false;
       }
-      
+
       // Generic error
       onError?.call('Satın alma başlatılamadı: $e');
       return false;
@@ -1056,7 +1267,9 @@ class IAPService {
     final storeProductId = _productIds[internalProductId];
     if (storeProductId == null) return null;
 
-    return _products.where((product) => product.id == storeProductId).firstOrNull;
+    return _products
+        .where((product) => product.id == storeProductId)
+        .firstOrNull;
   }
 
   /// Check if user has active premium
@@ -1094,14 +1307,13 @@ class IAPService {
         return;
       }
 
-
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (!userDoc.exists) {
         return;
       }
 
       final data = userDoc.data()!;
-      
+
       // Premium fields
       final isPremium = data['isPremium'];
       final premiumType = data['premiumType'];
@@ -1109,17 +1321,17 @@ class IAPService {
       final purchasedSuperLikes = data['purchasedSuperLikes'];
       final dailyLikesRemaining = data['dailyLikesRemaining'];
       final rewindsRemaining = data['rewindsRemaining'];
-      final balance = data['balance'] ?? data['diamonds'] ?? 0;
+      final balance = data['diamonds'] ?? 0;
 
-      if (premiumUntil is Timestamp) {
-      }
+      if (premiumUntil is Timestamp) {}
 
       // Check active premium status
       final isActivePremium = await hasActivePremium();
 
-      if (isPremium == true && premiumUntil is Timestamp && premiumUntil.toDate().isAfter(DateTime.now())) {
-      } else {
-      }
+      if (isPremium == true &&
+          premiumUntil is Timestamp &&
+          premiumUntil.toDate().isAfter(DateTime.now())) {
+      } else {}
 
       // Check recent purchases
       final purchasesQuery = await _firestore
@@ -1128,13 +1340,12 @@ class IAPService {
           .orderBy('createdAt', descending: true)
           .limit(5)
           .get();
-      
+
       if (purchasesQuery.docs.isNotEmpty) {
         for (final doc in purchasesQuery.docs) {
           final purchaseData = doc.data();
         }
-      } else {
-      }
+      } else {}
 
       // Check for critical errors
       final errorsQuery = await _firestore
@@ -1143,16 +1354,13 @@ class IAPService {
           .orderBy('timestamp', descending: true)
           .limit(3)
           .get();
-      
+
       if (errorsQuery.docs.isNotEmpty) {
         for (final doc in errorsQuery.docs) {
           final errorData = doc.data();
         }
-      } else {
-      }
-
-    } catch (e) {
-    }
+      } else {}
+    } catch (e) {}
   }
 
   /// Emergency fix for failed purchases - manually apply benefits
@@ -1167,9 +1375,9 @@ class IAPService {
         return;
       }
 
-
       if (simulateOnly) {
-        await Future.delayed(const Duration(milliseconds: 500)); // Simulate processing time
+        await Future.delayed(
+            const Duration(milliseconds: 500)); // Simulate processing time
         return;
       }
 
@@ -1188,7 +1396,7 @@ class IAPService {
 
       // Apply benefits manually
       final userRef = _firestore.collection('users').doc(user.uid);
-      
+
       await _firestore.runTransaction((transaction) async {
         final userDoc = await transaction.get(userRef);
         if (!userDoc.exists) {
@@ -1201,13 +1409,16 @@ class IAPService {
         // Apply benefits based on product type
         switch (internalProductId!) {
           case 'premium_weekly':
-            _preparePremiumUpdates(updates, userData, 'weekly', 7, 3); // 3 süper chat
+            _preparePremiumUpdates(
+                updates, userData, 'weekly', 7, 3); // 3 süper chat
             break;
           case 'premium_monthly':
-            _preparePremiumUpdates(updates, userData, 'monthly', 30, 10); // 10 süper chat
+            _preparePremiumUpdates(
+                updates, userData, 'monthly', 30, 10); // 10 süper chat
             break;
           case 'premium_quarterly':
-            _preparePremiumUpdates(updates, userData, 'quarterly', 90, 30); // 30 süper chat
+            _preparePremiumUpdates(
+                updates, userData, 'quarterly', 90, 30); // 30 süper chat
             break;
           case 'diamonds_10':
             _prepareDiamondUpdates(updates, userData, 10);
@@ -1228,7 +1439,6 @@ class IAPService {
         transaction.update(userRef, updates);
       });
 
-      
       // Log the emergency fix
       await _firestore.collection('emergency_fixes').add({
         'userId': user.uid,
@@ -1238,68 +1448,57 @@ class IAPService {
         'fixedAt': FieldValue.serverTimestamp(),
         'platform': 'android',
       });
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
-  
+
   /// Debug fonksiyonu: Google Play'deki aktif subscription'ları iptal eder
   static Future<void> cancelAllActiveSubscriptions() async {
     try {
-      
       // Android'de aktif subscription'ları bul ve iptal et
       if (Platform.isAndroid) {
-        // Pending purchases'ları aktifleştir
-        InAppPurchaseAndroidPlatformAddition.enablePendingPurchases();
-        
         // Mevcut satın almaları kontrol et
         await InAppPurchase.instance.restorePurchases();
-        
+
         // Purchase stream'den aktif subscription'ları bulup iptal ederiz
-        
       } else if (Platform.isIOS) {
         // iOS için StoreKit restoration
         try {
           // iOS'ta subscription'ları manuel olarak iptal edemeyiz
           // Kullanıcı App Store'dan iptal etmeli
-          
-        } catch (e) {
-        }
+        } catch (e) {}
       }
-      
-    } catch (e) {
-    }
+    } catch (e) {}
   }
-  
+
   /// 💬 Purchase Super Chats - Chat Request System
-  /// 
+  ///
   /// Atomic transaction ile Super Chat satın alma
   /// Double-spending korumalı ve güvenli
   Future<bool> purchaseSuperChats(
     String internalProductId, {
     VoidCallback? onSuccess,
     ValueChanged<String>? onError,
+    VoidCallback? onPendingTimeout,
   }) async {
-    
     // Ürün ID kontrolü
     if (!internalProductId.startsWith('super_chats_')) {
       onError?.call('Geçersiz ürün');
       return false;
     }
-    
+
     // Miktarı al
     final info = productInfo[internalProductId];
     if (info == null) {
       onError?.call('Ürün bilgisi bulunamadı');
       return false;
     }
-    
+
     final quantity = info['quantity'] as int?;
     if (quantity == null || quantity <= 0) {
       onError?.call('Geçersiz miktar');
       return false;
     }
-    
+
     // IAP satın almayı başlat
     // ✅ Benefit ekleme işini _applyPurchaseBenefits yapacak (buyProduct içinde otomatik çağrılır)
     // ❌ Burada manuel Firestore güncellemesi YAPILMAMALI (2 katı olmasın diye!)
@@ -1307,8 +1506,9 @@ class IAPService {
       internalProductId,
       onSuccess: onSuccess,
       onError: onError,
+      onPendingTimeout: onPendingTimeout,
     );
-    
+
     return purchaseResult;
   }
 
@@ -1316,7 +1516,7 @@ class IAPService {
   void dispose() {
     _subscription.cancel();
     _cancelPurchaseTimeout(); // 🛡️ Timeout cleanup
-    
+
     // 🛡️ DEDUPLICATION: App kapanırken processed purchases'ı temizle
     final oldCount = _processedPurchases.length;
     _processedPurchases.clear();

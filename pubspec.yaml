@@ -1,7 +1,7 @@
 name: lovenme
 description: "Venue-based community platform with mayor system for real-world connections. Connect with people through shared favorite places and become mayor of venues you love."
 publish_to: 'none'
-version: 1.0.0+20
+version: 1.0.0+26
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -51,9 +51,9 @@ dependencies:
   video_player: ^2.8.0
   
   # In-App Purchase
-  in_app_purchase: ^3.1.11
-  in_app_purchase_android: ^0.3.0+18
-  in_app_purchase_storekit: ^0.3.6+6
+  in_app_purchase: ^3.2.3
+  in_app_purchase_android: ^0.4.0+10
+  in_app_purchase_storekit: ^0.4.8+1
   flutter_svg: ^2.0.7
   
   # Google Sign In
@@ -63,10 +63,6 @@ dependencies:
   
   # Image Picker
   http: ^1.4.0
-  
-  # Twilio SMS Service
-  twilio_flutter: ^0.9.0
-  
   image_picker: ^1.0.4
   image_cropper: ^8.0.2
   permission_handler: ^11.3.1
@@ -98,6 +94,7 @@ flutter:
     - assets/images/
     - lib/images/logos/
     - lib/images/logos/LOVENME_white.png
+    - assets/images/logos/white_logo.png
 
 # App Icon Configuration
 flutter_launcher_icons:

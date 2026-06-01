@@ -29,19 +29,95 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
   DateTime? _premiumExpiryDate;
   bool _isLoadingPremiumStatus = true;
 
-  final List<PremiumPackage> _packages = [
-    PremiumPackage.fromType(PremiumSubscriptionType.weekly),
-    PremiumPackage.fromType(PremiumSubscriptionType.monthly),
-    PremiumPackage.fromType(PremiumSubscriptionType.quarterly),
-  ];
+  late List<PremiumPackage> _packages;
+  final IAPService _iapService = IAPService();
+  // Store'da aktif olan premium key'leri — boşken tüm paketler görünür
+  Set<String> _availablePremiumKeys = {};
 
   @override
   void initState() {
     super.initState();
+    // Önce sabit fiyatlarla başlat
+    _packages = [
+      PremiumPackage.fromType(PremiumSubscriptionType.weekly),
+      PremiumPackage.fromType(PremiumSubscriptionType.monthly),
+      PremiumPackage.fromType(PremiumSubscriptionType.quarterly),
+    ];
     _checkPremiumStatus();
+    _loadIAPPrices();
   }
 
-  /// Kullanıcının premium durumunu kontrol et
+  /// Google Play / App Store'dan gerçek fiyatları çek ve paketlere uygula
+  Future<void> _loadIAPPrices() async {
+    // IAP initialize edilmemişse bekle (max 5 sn)
+    for (int i = 0; i < 10; i++) {
+      if (_iapService.products.isNotEmpty) break;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    if (!mounted) return;
+
+    final keys = ['premium_weekly', 'premium_monthly', 'premium_quarterly'];
+    final types = [
+      PremiumSubscriptionType.weekly,
+      PremiumSubscriptionType.monthly,
+      PremiumSubscriptionType.quarterly,
+    ];
+
+    bool changed = false;
+    final updatedPackages = List<PremiumPackage>.from(_packages);
+
+    for (int i = 0; i < keys.length; i++) {
+      final rawPrice = _iapService.getProductRawPrice(keys[i]);
+      final priceString = _iapService.getProductPriceString(keys[i]);
+      if (rawPrice > 0 && rawPrice != updatedPackages[i].price) {
+        // IAP'tan gelen fiyat farklıysa paketi güncelle
+        updatedPackages[i] = PremiumPackage(
+          type: types[i],
+          title: updatedPackages[i].title,
+          subtitle: updatedPackages[i].subtitle,
+          price: rawPrice,
+          priceString: priceString,
+          originalPrice: updatedPackages[i].originalPrice,
+          duration: updatedPackages[i].duration,
+          features: updatedPackages[i].features,
+          isRecommended: updatedPackages[i].isRecommended,
+          isLaunchOffer: updatedPackages[i].isLaunchOffer,
+        );
+        changed = true;
+      }
+    }
+
+    if (changed && mounted) {
+      setState(() => _packages = updatedPackages);
+    }
+
+    // Store'da hangi premium ürünler aktif?
+    if (mounted) {
+      final availableKeys = _iapService.getAvailablePackageKeys('premium_');
+      setState(() {
+        _availablePremiumKeys = availableKeys;
+        // Sadece store'da aktif olan paketleri göster
+        // _iapService.products boşsa (internet yok / yükleniyor) filtreleme yapma
+        if (availableKeys.isNotEmpty) {
+          final keyMap = {
+            PremiumSubscriptionType.weekly: 'premium_weekly',
+            PremiumSubscriptionType.monthly: 'premium_monthly',
+            PremiumSubscriptionType.quarterly: 'premium_quarterly',
+          };
+          final filtered = updatedPackages
+              .where((p) => availableKeys.contains(keyMap[p.type]))
+              .toList();
+          if (filtered.isNotEmpty) {
+            _packages = filtered;
+            // Seçili index aralık dışına çıkmışsa 0'a resetle
+            if (_selectedPackageIndex >= _packages.length) {
+              _selectedPackageIndex = 0;
+            }
+          }
+        }
+      });
+    }
+  }
   Future<void> _checkPremiumStatus() async {
     try {
       final premiumStatus = await PremiumService.getPremiumStatus();
@@ -285,7 +361,7 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '₺${package.price.toStringAsFixed(0)}',
+                          package.priceString ?? '₺${package.price.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -295,7 +371,7 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
                         const SizedBox(height: 2),
                         if (package.originalPrice != null)
                           Text(
-                            '₺${package.originalPrice!.toStringAsFixed(0)}',
+                            '₺${package.originalPrice!.toStringAsFixed(2)}',
                             style: TextStyle(
                               fontSize: 11,
                               decoration: TextDecoration.lineThrough,
@@ -597,11 +673,12 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
   }
 
   /// Restore Purchases Button - Apple App Store Requirement (Guideline 3.1.1)
+  /// Also available on Android for subscription recovery
   Widget _buildRestorePurchasesButton() {
     return TextButton(
       onPressed: _isProcessing ? null : _restorePurchases,
       child: Text(
-        'Restore Purchases',
+        'Satın Almaları Geri Yükle',
         style: TextStyle(
           color: _isProcessing ? Colors.grey : AppColors.primary,
           fontSize: 14,

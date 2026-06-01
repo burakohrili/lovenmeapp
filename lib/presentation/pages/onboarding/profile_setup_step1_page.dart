@@ -1,7 +1,7 @@
-// profile_setup_step1_page.dart - CİNSİYET EKLENMİŞ HALİ
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_colors.dart';
 import 'profile_setup_step2_page.dart';
 import 'user_profile_provider.dart';
@@ -24,6 +24,9 @@ class _ProfileSetupStep1PageState extends ConsumerState<ProfileSetupStep1Page> {
   void initState() {
     super.initState();
     
+    // 🔥 YENİ: Firebase'den profil verilerini yükle
+    _loadProfileFromFirebase();
+    
     final profile = ref.read(userProfileProvider);
     
     _nameController = TextEditingController(text: profile.name ?? '');
@@ -34,6 +37,78 @@ class _ProfileSetupStep1PageState extends ConsumerState<ProfileSetupStep1Page> {
           : ''
     );
     _selectedGender = profile.gender; // YENİ - Mevcut cinsiyeti al
+  }
+  
+  // 🔥 YENİ: Firebase'den profil verilerini provider'a yükle
+  Future<void> _loadProfileFromFirebase() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      if (doc.exists) {
+        final data = doc.data()!;
+        
+        // Provider'ı Firebase verileriyle güncelle
+        final notifier = ref.read(userProfileProvider.notifier);
+        
+        // Temel bilgiler
+        if (data['name'] != null && data['surname'] != null && data['age'] != null) {
+          notifier.updateBasicInfo(
+            name: data['name'],
+            surname: data['surname'],
+            age: data['age'],
+            gender: data['gender'],
+          );
+        }
+        
+        // Hobiler
+        if (data['hobbies'] != null) {
+          notifier.updateHobbies(List<String>.from(data['hobbies']));
+        }
+        
+        // Fotoğraflar (Firebase Storage URL'leri)
+        if (data['photos'] != null) {
+          notifier.updatePhotos(List<String>.from(data['photos']));
+        }
+        
+        // Favori mekanlar
+        if (data['favoriteVenues'] != null) {
+          notifier.updateFavoriteVenues(List<String>.from(data['favoriteVenues']));
+        }
+        
+        if (data['favoriteVenueDetails'] != null) {
+          final venueDetails = (data['favoriteVenueDetails'] as List)
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          notifier.updateFavoriteVenueDetails(venueDetails);
+        }
+        
+        // Email & Phone
+        if (data['email'] != null) {
+          notifier.updateEmail(data['email']);
+        }
+        
+        if (data['phone'] != null) {
+          notifier.updatePhone(data['phone']);
+        }
+        
+        // Doğrulama durumları
+        if (data['isEmailVerified'] == true) {
+          notifier.setEmailVerified(true);
+        }
+        
+        if (data['isPhoneVerified'] == true) {
+          notifier.setPhoneVerified(true);
+        }
+      }
+    } catch (e) {
+      // Hata olsa bile devam et
+    }
   }
   
   @override
@@ -106,12 +181,36 @@ class _ProfileSetupStep1PageState extends ConsumerState<ProfileSetupStep1Page> {
         gender: _selectedGender,
       );
       
+      // 🔥 YENİ: Firebase'e hemen kaydet (uygulama kapanırsa veri kaybolmasın)
+      _saveToFirestore();
+      
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => const ProfileSetupStep2Page(),
         ),
       );
+    }
+  }
+  
+  // 🔥 YENİ: Firestore'a otomatik kayıt
+  Future<void> _saveToFirestore() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'name': _nameController.text,
+        'surname': _surnameController.text,
+        'age': int.parse(_ageController.text),
+        'gender': _selectedGender,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Hata olsa bile devam et (ağ sorunu olabilir)
     }
   }
 

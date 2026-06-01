@@ -66,7 +66,8 @@ class CheckInService {
     );
   }
 
-  static Future<void> _showPermissionRestrictedDialog(BuildContext context) async {
+  static Future<void> _showPermissionRestrictedDialog(
+      BuildContext context) async {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -91,7 +92,8 @@ class CheckInService {
     );
   }
 
-  static Future<void> _showPermissionPermanentlyDeniedDialog(BuildContext context) async {
+  static Future<void> _showPermissionPermanentlyDeniedDialog(
+      BuildContext context) async {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -128,7 +130,8 @@ class CheckInService {
   }
 
   // İzin durumuna göre uygun popup göster
-  static Future<void> _handlePermissionError(BuildContext context, PermissionStatus status) async {
+  static Future<void> _handlePermissionError(
+      BuildContext context, PermissionStatus status) async {
     switch (status) {
       case PermissionStatus.permanentlyDenied:
         await _showPermissionPermanentlyDeniedDialog(context);
@@ -154,7 +157,7 @@ class CheckInService {
           .child('checkins')
           .child(checkInId)
           .child('photo.jpg');
-      
+
       final uploadTask = await storageRef.putFile(image);
       final downloadUrl = await uploadTask.ref.getDownloadURL();
       return downloadUrl;
@@ -176,7 +179,6 @@ class CheckInService {
         return [];
       }
 
-
       final hasCheckedInHere = userCheckedInVenues.contains(venueId);
 
       if (!isPremium && !hasCheckedInHere) {
@@ -184,49 +186,51 @@ class CheckInService {
       }
 
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
-      final blockedUsers = List<String>.from(userDoc.data()?['blockedUsers'] ?? []);
+      final blockedUsers =
+          List<String>.from(userDoc.data()?['blockedUsers'] ?? []);
 
       final now = DateTime.now();
-      
+
       // 🔄 YENİ SİSTEM: Mekan kapanış saatine kadar o günkü check-in'ler gösterilir
       DateTime? timeFilterThreshold;
-      
+
       if (!isForDiscover) {
         // Today's check-ins only - until venue closes
         final todayStart = DateTime(now.year, now.month, now.day);
         timeFilterThreshold = todayStart;
-        
+
         // Venue closing time kontrolü
         final venueData = globalVenueCache[venueId];
         final venueClosingTime = venueData?['closingTime'] ?? '02:00';
         final timeParts = venueClosingTime.split(':');
-        final closingHour = timeParts.isNotEmpty ? (int.tryParse(timeParts[0]) ?? 2) : 2;
-        final closingMinute = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
-        
+        final closingHour =
+            timeParts.isNotEmpty ? (int.tryParse(timeParts[0]) ?? 2) : 2;
+        final closingMinute =
+            timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
+
         DateTime venueClosingDateTime;
         if (closingHour < 6) {
           // Gece 06:00'dan önce kapanan mekanlar ertesi gün kapanıyor
-          venueClosingDateTime = DateTime(now.year, now.month, now.day + 1, closingHour, closingMinute);
+          venueClosingDateTime = DateTime(
+              now.year, now.month, now.day + 1, closingHour, closingMinute);
         } else {
           // Normal kapanış saatleri
-          venueClosingDateTime = DateTime(now.year, now.month, now.day, closingHour, closingMinute);
+          venueClosingDateTime = DateTime(
+              now.year, now.month, now.day, closingHour, closingMinute);
         }
-        
+
         if (now.isAfter(venueClosingDateTime)) {
           await _clearVenueCheckInsAfterClosing(venueId, venueClosingDateTime);
           return [];
         }
-        
-      } else {
-      }
-      
+      } else {}
+
       final checkInsSnapshot = await _firestore
           .collection('check_ins')
           .where('venueId', isEqualTo: venueId)
           .orderBy('checkInTime', descending: true)
           .limit(50)
           .get();
-
 
       List<CheckedInUser> users = [];
       Set<String> processedUserIds = {}; // Duplikasyonu önlemek için
@@ -238,7 +242,8 @@ class CheckInService {
         final userId = data['userId'];
         final isFromFavorite = data['fromFavorite'] == true;
 
-        if (blockedUsers.contains(userId) || processedUserIds.contains(userId)) {
+        if (blockedUsers.contains(userId) ||
+            processedUserIds.contains(userId)) {
           continue;
         }
 
@@ -253,36 +258,36 @@ class CheckInService {
           } catch (e) {
             continue;
           }
-          
+
           // Map modunda sadece bugünkü check-in'ler
           if (!isForDiscover) {
-            if (timeFilterThreshold != null && checkInTime.isBefore(timeFilterThreshold)) {
+            if (timeFilterThreshold != null &&
+                checkInTime.isBefore(timeFilterThreshold)) {
               continue;
             }
           }
 
-          final userDocData = await _firestore.collection('users').doc(userId).get();
+          final userDocData =
+              await _firestore.collection('users').doc(userId).get();
 
           if (userDocData.exists) {
             final userData = userDocData.data()!;
             final mapVisibility = userData['mapVisibility'] ?? true;
             final profileActive = userData['profileActive'] ?? true;
 
-
             if (!mapVisibility && userId != user.uid) {
-              if (isFromFavorite) {
-              }
+              if (isFromFavorite) {}
               continue;
             }
 
             if (!profileActive && userId != user.uid) {
-              if (isFromFavorite) {
-              }
+              if (isFromFavorite) {}
               continue;
             }
 
             String userName = userData['name'] ?? 'İsimsiz';
-            if (userData['surname'] != null && userData['surname'].toString().isNotEmpty) {
+            if (userData['surname'] != null &&
+                userData['surname'].toString().isNotEmpty) {
               final surname = userData['surname'].toString();
               if (surname.isNotEmpty) {
                 userName = '$userName ${surname[0]}.';
@@ -314,8 +319,7 @@ class CheckInService {
             // Orphaned check-in cleanup
             try {
               await doc.reference.delete();
-            } catch (e) {
-            }
+            } catch (e) {}
           }
         }
       }
@@ -335,11 +339,13 @@ class CheckInService {
             final data = doc.data();
             final userId = data['userId'];
 
-            if (blockedUsers.contains(userId) || processedUserIds.contains(userId)) {
+            if (blockedUsers.contains(userId) ||
+                processedUserIds.contains(userId)) {
               continue;
             }
 
-            final userDocData = await _firestore.collection('users').doc(userId).get();
+            final userDocData =
+                await _firestore.collection('users').doc(userId).get();
             if (userDocData.exists) {
               final userData = userDocData.data()!;
               final mapVisibility = userData['mapVisibility'] ?? true;
@@ -350,7 +356,8 @@ class CheckInService {
               }
 
               String userName = userData['name'] ?? 'İsimsiz';
-              if (userData['surname'] != null && userData['surname'].toString().isNotEmpty) {
+              if (userData['surname'] != null &&
+                  userData['surname'].toString().isNotEmpty) {
                 final surname = userData['surname'].toString();
                 if (surname.isNotEmpty) {
                   userName = '$userName ${surname[0]}.';
@@ -365,7 +372,7 @@ class CheckInService {
                 }
               }
 
-              final registrationTime = data['registrationDate'] is Timestamp 
+              final registrationTime = data['registrationDate'] is Timestamp
                   ? (data['registrationDate'] as Timestamp).toDate()
                   : DateTime.now();
 
@@ -375,7 +382,8 @@ class CheckInService {
                 userPhoto: userPhoto,
                 checkInTime: registrationTime,
                 latitude: data['venueLocation']?['latitude']?.toDouble() ?? 0.0,
-                longitude: data['venueLocation']?['longitude']?.toDouble() ?? 0.0,
+                longitude:
+                    data['venueLocation']?['longitude']?.toDouble() ?? 0.0,
                 fromFavorite: true,
               );
 
@@ -383,26 +391,22 @@ class CheckInService {
               processedUserIds.add(userId);
             }
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
 
       users.sort((a, b) => b.checkInTime.compareTo(a.checkInTime));
-      
+
       // 🔄 YENİ SİSTEM: Muhtar bilgilerini ekle
       users = await _addMayorInfoToUsers(venueId, users);
-      
-      
+
       if (!isForDiscover && timeFilterThreshold != null) {
-      } else {
-      }
+      } else {}
 
       if (users.isNotEmpty) {
         for (int i = 0; i < users.length && i < 5; i++) {
           final user = users[i];
         }
-        if (users.length > 5) {
-        }
+        if (users.length > 5) {}
       }
 
       return users;
@@ -412,33 +416,33 @@ class CheckInService {
   }
 
   // 🔄 YENİ FONKSİYON: Mekan kapandıktan sonra o günkü check-in'leri temizle
-  Future<void> _clearVenueCheckInsAfterClosing(String venueId, DateTime closingTime) async {
+  Future<void> _clearVenueCheckInsAfterClosing(
+      String venueId, DateTime closingTime) async {
     try {
-      
       final today = DateTime.now();
       final todayStart = DateTime(today.year, today.month, today.day);
-      
+
       final checkInsToDelete = await _firestore
           .collection('check_ins')
           .where('venueId', isEqualTo: venueId)
-          .where('checkInTime', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-          .where('checkInTime', isLessThanOrEqualTo: Timestamp.fromDate(closingTime))
+          .where('checkInTime',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+          .where('checkInTime',
+              isLessThanOrEqualTo: Timestamp.fromDate(closingTime))
           .get();
-      
+
       final batch = _firestore.batch();
       for (final doc in checkInsToDelete.docs) {
         batch.delete(doc.reference);
       }
-      
+
       if (checkInsToDelete.docs.isNotEmpty) {
         await batch.commit();
       }
-      
+
       // Daily mayors da temizle
       await _clearDailyMayorAfterClosing(venueId);
-      
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // 🔄 YENİ FONKSİYON: Günlük muhtarı temizle
@@ -446,40 +450,36 @@ class CheckInService {
     try {
       final today = DateTime.now();
       final todayKey = DateFormat('yyyy-MM-dd').format(today);
-      
+
       await _firestore
           .collection('daily_mayors')
           .doc('${venueId}_$todayKey')
           .delete();
-      
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // 🔄 YENİ FONKSİYON: Kullanıcılara muhtar bilgilerini ekle
-  Future<List<CheckedInUser>> _addMayorInfoToUsers(String venueId, List<CheckedInUser> users) async {
+  Future<List<CheckedInUser>> _addMayorInfoToUsers(
+      String venueId, List<CheckedInUser> users) async {
     try {
       final today = DateTime.now();
       final todayKey = DateFormat('yyyy-MM-dd').format(today);
       final mayorDocId = '${venueId}_$todayKey';
-      
+
       // Bu venue için bugünün muhtarını getir
-      final mayorDoc = await _firestore
-          .collection('daily_mayors')
-          .doc(mayorDocId)
-          .get();
-      
+      final mayorDoc =
+          await _firestore.collection('daily_mayors').doc(mayorDocId).get();
+
       if (!mayorDoc.exists) {
         return users;
       }
-      
+
       final mayorData = mayorDoc.data()!;
       final mayorUserId = mayorData['userId'] as String;
       final mayorType = mayorData['mayorType'] as String;
       final isClickable = mayorData['isClickable'] ?? false;
       final canMessage = mayorData['canMessage'] ?? false;
-      
-      
+
       // Kullanıcı listesinde muhtarı bul ve bilgilerini güncelle
       final updatedUsers = users.map((user) {
         if (user.userId == mayorUserId) {
@@ -499,14 +499,14 @@ class CheckInService {
         }
         return user;
       }).toList();
-      
+
       // Muhtarı listenin başına taşı
       final mayorIndex = updatedUsers.indexWhere((user) => user.isMayor);
       if (mayorIndex != -1) {
         final mayor = updatedUsers.removeAt(mayorIndex);
         updatedUsers.insert(0, mayor);
       }
-      
+
       return updatedUsers;
     } catch (e) {
       return users;
@@ -527,11 +527,12 @@ class CheckInService {
 
     try {
       // Son check-in'i bul (herhangi bir venue'da)
+      // NOT: İlk kayıttaki check-in'leri (isInitialRegistration: true) görmezden gel
       final lastCheckInQuery = await _firestore
           .collection('check_ins')
           .where('userId', isEqualTo: user.uid)
           .orderBy('checkInTime', descending: true)
-          .limit(1)
+          .limit(10) // İlk 10 check-in'i al (genellikle yeterli olur)
           .get();
 
       if (lastCheckInQuery.docs.isEmpty) {
@@ -543,15 +544,31 @@ class CheckInService {
         );
       }
 
-      final lastCheckInDoc = lastCheckInQuery.docs.first;
-      final lastCheckInTimestamp = lastCheckInDoc.data()['checkInTime'] as Timestamp;
+      // İlk kayıtta oluşturulan check-in'leri filtrele
+      final validCheckIns = lastCheckInQuery.docs.where((doc) {
+        final data = doc.data();
+        return data['isInitialRegistration'] !=
+            true; // İlk kayıt check-in'i değilse al
+      }).toList();
+
+      if (validCheckIns.isEmpty) {
+        return CheckInCooldownStatus(
+          canCheckIn: true,
+          remainingMinutes: 0,
+          lastCheckInTime: null,
+          message: 'Check-in yapabilirsiniz',
+        );
+      }
+
+      final lastCheckInDoc = validCheckIns.first;
+      final lastCheckInTimestamp =
+          lastCheckInDoc.data()['checkInTime'] as Timestamp;
       final lastCheckInTime = lastCheckInTimestamp.toDate();
       final now = DateTime.now();
-      
+
       // 20 dakika = 1200 saniye - YENİ COOLDOWN SÜRESİ
       const cooldownDuration = Duration(minutes: 20);
       final timeSinceLastCheckIn = now.difference(lastCheckInTime);
-      
 
       if (timeSinceLastCheckIn >= cooldownDuration) {
         return CheckInCooldownStatus(
@@ -564,12 +581,13 @@ class CheckInService {
         final remainingTime = cooldownDuration - timeSinceLastCheckIn;
         final remainingMinutes = remainingTime.inMinutes;
         final remainingSeconds = remainingTime.inSeconds % 60;
-        
+
         return CheckInCooldownStatus(
           canCheckIn: false,
           remainingMinutes: remainingMinutes,
           lastCheckInTime: lastCheckInTime,
-          message: 'Bir sonraki check-in için $remainingMinutes dakika $remainingSeconds saniye bekleyin',
+          message:
+              'Bir sonraki check-in için $remainingMinutes dakika $remainingSeconds saniye bekleyin',
         );
       }
     } catch (e) {
@@ -582,7 +600,8 @@ class CheckInService {
     }
   }
 
-  Future<void> performCheckIn(Venue venue, {
+  Future<void> performCheckIn(
+    Venue venue, {
     required double maxDistance,
     required LatLng? currentPosition,
     required Set<String> favoriteVenueIds,
@@ -614,7 +633,8 @@ class CheckInService {
     }
 
     if (currentPosition != null && !venue.isFavorite) {
-      final userLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
+      final userLocation =
+          LatLng(currentPosition.latitude, currentPosition.longitude);
       final distance = _calculateDistance(userLocation, venue.location);
 
       if (distance > maxDistance) {
@@ -631,7 +651,8 @@ class CheckInService {
     String userName = '';
     if (userData['name'] != null && userData['name'].toString().isNotEmpty) {
       userName = userData['name'];
-      if (userData['surname'] != null && userData['surname'].toString().isNotEmpty) {
+      if (userData['surname'] != null &&
+          userData['surname'].toString().isNotEmpty) {
         userName = '$userName ${userData['surname'].toString()[0]}.';
       }
     } else {
@@ -663,6 +684,7 @@ class CheckInService {
         DateTime.now().add(const Duration(days: 3)),
       ),
       'totalCheckIns': (userData['totalCheckIns'] ?? 0) + 1,
+      'isInitialRegistration': false, // Normal check-in (cooldown'a dahil)
     });
 
     // 🔄 YENİ: Discover sistemi için check-in'i history'e de kaydet (30 gün saklansın)
@@ -681,10 +703,10 @@ class CheckInService {
       'checkInTime': FieldValue.serverTimestamp(),
       'originalCheckInId': checkInRef.id,
       'forDiscoverMatching': true,
-      'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
+      'expiresAt':
+          Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
       'totalCheckIns': (userData['totalCheckIns'] ?? 0) + 1,
     });
-
 
     await _firestore.collection('users').doc(user.uid).update({
       'totalCheckIns': FieldValue.increment(1),
@@ -692,23 +714,22 @@ class CheckInService {
     });
 
     // 🔄 YENİ SİSTEM: İlk check-in yapan günlük muhtar oluyor
-    await _checkAndAssignDailyMayor(venue.placeId, user.uid, userName, userPhoto);
+    await _checkAndAssignDailyMayor(
+        venue.placeId, user.uid, userName, userPhoto);
   }
 
   // 🔄 YENİ FONKSİYON: Günlük muhtar kontrolü ve atama
-  Future<void> _checkAndAssignDailyMayor(String venueId, String userId, String userName, String? userPhoto) async {
+  Future<void> _checkAndAssignDailyMayor(
+      String venueId, String userId, String userName, String? userPhoto) async {
     try {
       final today = DateTime.now();
       final todayKey = DateFormat('yyyy-MM-dd').format(today);
       final mayorDocId = '${venueId}_$todayKey';
-      
-      
+
       // Bu venue için bugün zaten muhtar var mı kontrol et
-      final existingMayor = await _firestore
-          .collection('daily_mayors')
-          .doc(mayorDocId)
-          .get();
-      
+      final existingMayor =
+          await _firestore.collection('daily_mayors').doc(mayorDocId).get();
+
       if (!existingMayor.exists) {
         // Bu venue için bugün ilk check-in - muhtar ol!
         await _firestore.collection('daily_mayors').doc(mayorDocId).set({
@@ -720,30 +741,29 @@ class CheckInService {
           'isClickable': false, // Profil tıklanamaz
           'canMessage': false, // Mesaj atılamaz
           'assignedAt': FieldValue.serverTimestamp(),
-          'date': Timestamp.fromDate(DateTime(today.year, today.month, today.day)),
+          'date':
+              Timestamp.fromDate(DateTime(today.year, today.month, today.day)),
           'diamondsSpent': 0, // İlk check-in muhtarı için 0
         });
-        
       } else {
         final mayorData = existingMayor.data()!;
         final existingMayorType = mayorData['mayorType'] ?? 'first_checkin';
-        
+
         // Eğer mevcut muhtar elmas ile olduysa, o devam eder
         if (existingMayorType == 'diamond') {
-        } else {
-        }
+        } else {}
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   double _calculateDistance(LatLng point1, LatLng point2) {
     const double earthRadius = 6371000;
-    
+
     double lat1Rad = point1.latitude * (math.pi / 180);
     double lat2Rad = point2.latitude * (math.pi / 180);
     double deltaLatRad = (point2.latitude - point1.latitude) * (math.pi / 180);
-    double deltaLngRad = (point2.longitude - point1.longitude) * (math.pi / 180);
+    double deltaLngRad =
+        (point2.longitude - point1.longitude) * (math.pi / 180);
 
     double a = math.sin(deltaLatRad / 2) * math.sin(deltaLatRad / 2) +
         math.cos(lat1Rad) *
@@ -757,7 +777,8 @@ class CheckInService {
   }
 
   // Günlük muhtarları yükle
-  Future<Map<String, Map<String, dynamic>>> loadDailyMayors({bool forceRefresh = false}) async {
+  Future<Map<String, Map<String, dynamic>>> loadDailyMayors(
+      {bool forceRefresh = false}) async {
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
@@ -768,31 +789,33 @@ class CheckInService {
       if (forceRefresh) {
         mayorsSnapshot = await _firestore
             .collection('daily_mayors')
-            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+            .where('date',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
             .where('date', isLessThan: Timestamp.fromDate(endOfDay))
-            .get(const GetOptions(source: Source.server)); // Server'dan zorunlu al
+            .get(const GetOptions(
+                source: Source.server)); // Server'dan zorunlu al
       } else {
         mayorsSnapshot = await _firestore
             .collection('daily_mayors')
-            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+            .where('date',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
             .where('date', isLessThan: Timestamp.fromDate(endOfDay))
             .get();
       }
 
       Map<String, Map<String, dynamic>> dailyMayors = {};
-      
+
       for (var doc in mayorsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final venueId = data['venueId'] as String;
         final mayorType = data['mayorType'] ?? 'first_checkin';
         final diamondsSpent = data['diamondsSpent'] ?? 0;
-        
-        
+
         // Eğer aynı venue için zaten bir mayor varsa, elmas muhtarlığını tercih et
         if (dailyMayors.containsKey(venueId)) {
           final existingMayor = dailyMayors[venueId]!;
           final existingDiamonds = existingMayor['diamondsSpent'] ?? 0;
-          
+
           // Mevcut kayıt elmas muhtarlığı ise ve yeni kayıt da elmas muhtarlığı ise, daha yüksek elmas miktarını al
           // Mevcut kayıt ücretsiz ise ve yeni kayıt elmas muhtarlığı ise, yeni kaydı al
           if (diamondsSpent > existingDiamonds) {
@@ -807,10 +830,10 @@ class CheckInService {
               'isClickable': data['isClickable'] ?? false,
               'canMessage': data['canMessage'] ?? false,
               'diamondsSpent': data['diamondsSpent'] ?? 0,
-              'diamondCount': data['diamondCount'] ?? data['diamondsSpent'] ?? 0,
+              'diamondCount':
+                  data['diamondCount'] ?? data['diamondsSpent'] ?? 0,
             };
-          } else {
-          }
+          } else {}
         } else {
           // İlk kez eklenen venue
           dailyMayors[venueId] = {
@@ -836,12 +859,12 @@ class CheckInService {
   }
 
   // Belirli bir venue için günlük muhtarını yükle (cache bypass için)
-  Future<Map<String, dynamic>?> getDailyMayorForVenue(String venueId, {bool forceRefresh = false}) async {
+  Future<Map<String, dynamic>?> getDailyMayorForVenue(String venueId,
+      {bool forceRefresh = false}) async {
     try {
       final today = DateTime.now();
       final todayKey = DateFormat('yyyy-MM-dd').format(today);
       final mayorDocId = '${venueId}_$todayKey';
-
 
       // Direkt document ID ile al - atomic transaction ile aynı ID
       // 🔥 CACHE BYPASS: Force refresh için cache'i bypass et
@@ -850,18 +873,16 @@ class CheckInService {
         mayorSnapshot = await _firestore
             .collection('daily_mayors')
             .doc(mayorDocId)
-            .get(const GetOptions(source: Source.server)); // Server'dan zorunlu al
+            .get(const GetOptions(
+                source: Source.server)); // Server'dan zorunlu al
       } else {
-        mayorSnapshot = await _firestore
-            .collection('daily_mayors')
-            .doc(mayorDocId)
-            .get();
+        mayorSnapshot =
+            await _firestore.collection('daily_mayors').doc(mayorDocId).get();
       }
-
 
       if (mayorSnapshot.exists) {
         final data = mayorSnapshot.data()! as Map<String, dynamic>;
-        
+
         final mayorData = {
           'userId': data['userId'],
           'userName': data['userName'],
@@ -885,7 +906,9 @@ class CheckInService {
   }
 
   // Günlük muhtar kontrolü ve ataması
-  Future<void> checkAndAssignDailyMayor(String venueId, String userId, String userName, String? userPhoto, {String? venueName}) async {
+  Future<void> checkAndAssignDailyMayor(
+      String venueId, String userId, String userName, String? userPhoto,
+      {String? venueName}) async {
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
@@ -902,7 +925,7 @@ class CheckInService {
 
       if (existingMayorSnapshot.docs.isEmpty) {
         // İlk check-in! Bu kullanıcı günün muhtarı oluyor
-        
+
         // Kullanıcının toplam check-in sayısını al
         final userDoc = await _firestore.collection('users').doc(userId).get();
         final userData = userDoc.data();
@@ -922,10 +945,8 @@ class CheckInService {
 
         await _firestore.collection('daily_mayors').add(mayorData);
         // Note: No notification sent to new mayor - they are already aware they checked in
-      } else {
-      }
-    } catch (e) {
-    }
+      } else {}
+    } catch (e) {}
   }
 
   // Check-in sonrası feed post oluştur
@@ -963,8 +984,7 @@ class CheckInService {
         'longitude': longitude,
         'type': 'check_in',
       });
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // Muhtar olma fiyatını hesapla (yeni basamaklı sistem)
@@ -973,26 +993,23 @@ class CheckInService {
       final today = DateTime.now();
       final todayKey = DateFormat('yyyy-MM-dd').format(today);
       final documentId = '${venueId}_$todayKey';
-      
-      
+
       // ATOMIC DOCUMENT ID ile doğru muhtar verisini al
-      final existingMayorDoc = await _firestore
-          .collection('daily_mayors')
-          .doc(documentId)
-          .get();
+      final existingMayorDoc =
+          await _firestore.collection('daily_mayors').doc(documentId).get();
 
       if (existingMayorDoc.exists) {
         final existingMayorData = existingMayorDoc.data()!;
         final existingDiamondCount = existingMayorData['diamondsSpent'] ?? 0;
-        final existingMayorType = existingMayorData['mayorType'] ?? 'first_checkin';
-        
-        
+        final existingMayorType =
+            existingMayorData['mayorType'] ?? 'first_checkin';
+
         // Eğer first_checkin muhtarıysa, minimum fiyat başlar
         if (existingMayorType == 'first_checkin') {
           final minPrice = _getMinimumPrice();
           return minPrice;
         }
-        
+
         // Eğer elmas muhtarıysa, basamaklı artış sistemi
         final nextPrice = _calculateNextPrice(existingDiamondCount);
         return nextPrice;
@@ -1009,7 +1026,7 @@ class CheckInService {
   // Basamaklı fiyat sistemi hesaplaması
   int _calculateNextPrice(int currentPrice) {
     int increment;
-    
+
     // Basamaklı artış: 0–10: +5, 10–50: +10, 50–99: +25, 99+: +50
     if (currentPrice < 10) {
       increment = 5;
@@ -1020,7 +1037,7 @@ class CheckInService {
     } else {
       increment = 50;
     }
-    
+
     int nextPrice = currentPrice + increment;
     return nextPrice;
   }
@@ -1036,25 +1053,24 @@ class CheckInService {
       final today = DateTime.now();
       final todayKey = DateFormat('yyyy-MM-dd').format(today);
       final documentId = '${venueId}_$todayKey';
-      
+
       // ATOMIC DOCUMENT ID ile mevcut muhtar verisini al
-      final existingMayorDoc = await _firestore
-          .collection('daily_mayors')
-          .doc(documentId)
-          .get();
+      final existingMayorDoc =
+          await _firestore.collection('daily_mayors').doc(documentId).get();
 
       if (existingMayorDoc.exists) {
         final existingMayorData = existingMayorDoc.data()!;
         final existingDiamondCount = existingMayorData['diamondsSpent'] ?? 0;
-        final existingMayorType = existingMayorData['mayorType'] ?? 'first_checkin';
-        
+        final existingMayorType =
+            existingMayorData['mayorType'] ?? 'first_checkin';
+
         // Eğer first_checkin muhtarıysa, minimum fiyatın 2 katı
         if (existingMayorType == 'first_checkin') {
           final minPrice = _getMinimumPrice();
           final buyNowPrice = minPrice * 2;
           return buyNowPrice;
         }
-        
+
         // Eğer elmas muhtarıysa, harcadığının 2 katı
         final buyNowPrice = existingDiamondCount * 2;
         return buyNowPrice;
@@ -1088,10 +1104,10 @@ class CheckInService {
         currentUser.uid,
         'normal',
       );
-      
+
       if (!canProceed) {
         return {
-          'success': false, 
+          'success': false,
           'error': 'rate_limited',
           'message': 'Please wait before making another mayorship request'
         };
@@ -1104,12 +1120,12 @@ class CheckInService {
 
       // Normal mayorship fiyatını hesapla
       final mayorshipPrice = await calculateMayorshipPrice(venueId);
-      
+
       // Kullanıcının elmas bakiyesini kontrol et
       final userBalance = await getUserDiamondBalance(currentUser.uid);
       if (userBalance < mayorshipPrice) {
         return {
-          'success': false, 
+          'success': false,
           'error': 'insufficient_diamonds',
           'required': mayorshipPrice,
           'available': userBalance,
@@ -1125,46 +1141,51 @@ class CheckInService {
 
       final userData = userSnapshot.data()!;
       final userName = userData['name'] ?? 'İsimsiz';
-      final userPhoto = userData['photos'] != null && userData['photos'].isNotEmpty 
-          ? userData['photos'][0] 
-          : null;
+      final userPhoto =
+          userData['photos'] != null && userData['photos'].isNotEmpty
+              ? userData['photos'][0]
+              : null;
 
-      // 🛡️ STEP 2: Execute Atomic Transaction with All Protections  
+      // 🛡️ STEP 2: Execute Atomic Transaction with All Protections
       // Variable to store final charged price for conflict detection
       int finalChargedPrice = mayorshipPrice; // Will be updated in transaction
-      
+
       // Variables for notification (will be set in transaction)
       String? previousMayorId;
       int previousMayorDiamonds = 0;
-      
+
       await _firestore.runTransaction((transaction) async {
-        final startOfDay = DateTime.now().copyWith(hour: 0, minute: 0, second: 0, millisecond: 0);
-        final mayorRef = _firestore.collection('daily_mayors').doc('${venueId}_${DateFormat('yyyy-MM-dd').format(startOfDay)}');
-        
+        final startOfDay = DateTime.now()
+            .copyWith(hour: 0, minute: 0, second: 0, millisecond: 0);
+        final mayorRef = _firestore
+            .collection('daily_mayors')
+            .doc('${venueId}_${DateFormat('yyyy-MM-dd').format(startOfDay)}');
+
         // 1. Fresh user balance check (race condition prevention)
         final freshUserSnapshot = await transaction.get(userRef);
         if (!freshUserSnapshot.exists) {
           throw Exception('User document not found during transaction');
         }
-        
+
         final currentBalance = freshUserSnapshot.data()!['diamonds'] ?? 0;
-        
+
         // 2. Fresh mayor check and price validation
         final mayorSnapshot = await transaction.get(mayorRef);
         String? currentMayorUserId;
         int currentMayorDiamonds = 0;
         int actualRequiredPrice = mayorshipPrice;
-        
+
         if (mayorSnapshot.exists) {
           final existingMayorData = mayorSnapshot.data()!;
           currentMayorUserId = existingMayorData['userId'] ?? '';
           currentMayorDiamonds = existingMayorData['diamondsSpent'] ?? 0;
-          final existingMayorType = existingMayorData['mayorType'] ?? 'first_checkin';
-          
+          final existingMayorType =
+              existingMayorData['mayorType'] ?? 'first_checkin';
+
           // Set values for notification
           previousMayorId = currentMayorUserId;
           previousMayorDiamonds = currentMayorDiamonds;
-          
+
           // Fresh normal mayorship fiyat hesaplama
           if (existingMayorType == 'first_checkin') {
             actualRequiredPrice = 5; // First checkin'den sonra minimum
@@ -1175,41 +1196,44 @@ class CheckInService {
         } else {
           actualRequiredPrice = 5; // İlk muhtar minimum fiyat
         }
-        
-        
+
         // 🚨 PRICE VALIDATION: UI'dan gelen fiyat ile gerçek fiyat eşleşmeli
         if (mayorshipPrice != actualRequiredPrice) {
-          throw Exception('Price changed! UI shows $mayorshipPrice diamonds, but current price is $actualRequiredPrice diamonds. Please refresh and try again.');
+          throw Exception(
+              'Price changed! UI shows $mayorshipPrice diamonds, but current price is $actualRequiredPrice diamonds. Please refresh and try again.');
         }
-        
+
         // Kullanıcının yeterli elması var mı kontrol et (fresh price ile)
         if (currentBalance < actualRequiredPrice) {
-          throw Exception('Insufficient diamonds: $currentBalance < $actualRequiredPrice');
+          throw Exception(
+              'Insufficient diamonds: $currentBalance < $actualRequiredPrice');
         }
-        
+
         // Final diamond calculation
         int totalDiamondsSpent = actualRequiredPrice;
         if (mayorSnapshot.exists) {
           final existingMayorData = mayorSnapshot.data()!;
           currentMayorUserId = existingMayorData['userId'] ?? '';
           currentMayorDiamonds = existingMayorData['diamondsSpent'] ?? 0;
-          final existingMayorType = existingMayorData['mayorType'] ?? 'first_checkin';
-          
+          final existingMayorType =
+              existingMayorData['mayorType'] ?? 'first_checkin';
+
           // Aynı kullanıcıysa upgrade yap
           if (currentMayorUserId == currentUser.uid) {
             totalDiamondsSpent = currentMayorDiamonds + actualRequiredPrice;
           } else {
             // Farklı kullanıcıysa yeterli elmas kontrolü
-            if (existingMayorType == 'diamond' && actualRequiredPrice <= currentMayorDiamonds) {
-              throw Exception('Insufficient diamonds to replace current mayor: Need more than $currentMayorDiamonds, provided: $actualRequiredPrice');
+            if (existingMayorType == 'diamond' &&
+                actualRequiredPrice <= currentMayorDiamonds) {
+              throw Exception(
+                  'Insufficient diamonds to replace current mayor: Need more than $currentMayorDiamonds, provided: $actualRequiredPrice');
             }
           }
-        } else {
-        }
-        
+        } else {}
+
         // Store final price for external use
         finalChargedPrice = actualRequiredPrice;
-        
+
         // 🚨 CRITICAL RACE CONDITION FIX: Normal mayorship için conditional write
         // Transaction başladıktan sonra mayor değişip değişmediğini kontrol et
         // NOT: Yeni mayor durumunda (currentMayorUserId == null) race condition check'i bypass et
@@ -1219,22 +1243,23 @@ class CheckInService {
             final freshData = freshMayorCheck.data()!;
             final freshUserId = freshData['userId'] ?? '';
             final freshDiamonds = freshData['diamondsSpent'] ?? 0;
-            
+
             // Başka biri aynı anda daha fazla elmasla muhtar olduysa transaction'ı reddet
-            if (freshUserId != currentMayorUserId || freshDiamonds != currentMayorDiamonds) {
-              throw Exception('RACE CONDITION DETECTED: Another user became mayor during this transaction. Current mayor: $freshUserId (was: $currentMayorUserId), diamonds: $freshDiamonds (was: $currentMayorDiamonds)');
+            if (freshUserId != currentMayorUserId ||
+                freshDiamonds != currentMayorDiamonds) {
+              throw Exception(
+                  'RACE CONDITION DETECTED: Another user became mayor during this transaction. Current mayor: $freshUserId (was: $currentMayorUserId), diamonds: $freshDiamonds (was: $currentMayorDiamonds)');
             }
           }
-        } else {
-        }
-        
+        } else {}
+
         // 3. Diamond balance güncelle (fresh price ile)
         final newBalance = currentBalance - actualRequiredPrice;
         transaction.update(userRef, {
           'diamonds': newBalance,
           'lastDiamondUpdate': FieldValue.serverTimestamp(),
         });
-        
+
         // 4. Mayor kaydını güncelle (enhanced audit trail)
         transaction.set(mayorRef, {
           'venueId': venueId,
@@ -1258,9 +1283,10 @@ class CheckInService {
           'isUpgrade': currentMayorUserId == currentUser.uid,
           'transactionType': 'normal_mayorship',
         });
-        
+
         // 5. Transaction log ekle (enhanced)
-        final transactionRef = _firestore.collection('diamond_transactions').doc();
+        final transactionRef =
+            _firestore.collection('diamond_transactions').doc();
         transaction.set(transactionRef, {
           'userId': currentUser.uid,
           'venueId': venueId,
@@ -1276,19 +1302,20 @@ class CheckInService {
           'isAtomic': true,
           'uiProvidedPrice': mayorshipPrice,
           'actualChargedPrice': actualRequiredPrice,
-          'priceValidation': mayorshipPrice == actualRequiredPrice ? 'PASSED' : 'FAILED',
+          'priceValidation':
+              mayorshipPrice == actualRequiredPrice ? 'PASSED' : 'FAILED',
           'raceConditionProtected': true,
         });
-        
-        if (currentMayorUserId != null) {
-        }
+
+        if (currentMayorUserId != null) {}
       });
 
       // � STEP 2: Send notifications for mayorship change
       try {
         // Send notification to previous mayor if they existed
         if (previousMayorId != null && previousMayorId != currentUser.uid) {
-          String mayorType = (previousMayorDiamonds == 0) ? 'first_checkin' : 'diamond';
+          String mayorType =
+              (previousMayorDiamonds == 0) ? 'first_checkin' : 'diamond';
           await NotificationService.sendMayorLostNotification(
             toUserId: previousMayorId!,
             venueName: venueName,
@@ -1307,7 +1334,8 @@ class CheckInService {
           venueId: venueId,
           userId: currentUser.uid,
           diamondAmount: finalChargedPrice,
-          transactionId: 'normal_purchase_${DateTime.now().millisecondsSinceEpoch}',
+          transactionId:
+              'normal_purchase_${DateTime.now().millisecondsSinceEpoch}',
           monitoringDuration: const Duration(minutes: 10),
         );
       } catch (e) {
@@ -1316,22 +1344,21 @@ class CheckInService {
 
       return {'success': true};
     } catch (e) {
-      
       // 🚨 RACE CONDITION ERROR HANDLING
       if (e.toString().contains('RACE CONDITION DETECTED')) {
         return {'success': false, 'error': 'race_condition_detected'};
       }
-      
-      // 🚨 PRICE CHANGE ERROR HANDLING  
+
+      // 🚨 PRICE CHANGE ERROR HANDLING
       if (e.toString().contains('Price changed!')) {
         return {'success': false, 'error': 'price_changed'};
       }
-      
+
       // 🚨 INSUFFICIENT DIAMONDS
       if (e.toString().contains('Insufficient diamonds')) {
         return {'success': false, 'error': 'insufficient_diamonds'};
       }
-      
+
       return {'success': false, 'error': 'purchase_failed'};
     }
   }
@@ -1354,10 +1381,10 @@ class CheckInService {
         currentUser.uid,
         'buy_now',
       );
-      
+
       if (!canProceed) {
         return {
-          'success': false, 
+          'success': false,
           'error': 'rate_limited',
           'message': 'Please wait before making another mayorship request'
         };
@@ -1370,12 +1397,12 @@ class CheckInService {
 
       // Buy Now fiyatını hesapla (regular fiyatın 2 katı)
       final buyNowPrice = await calculateBuyNowPrice(venueId);
-      
+
       // Kullanıcının elmas bakiyesini kontrol et
       final userBalance = await getUserDiamondBalance(currentUser.uid);
       if (userBalance < buyNowPrice) {
         return {
-          'success': false, 
+          'success': false,
           'error': 'insufficient_diamonds',
           'required': buyNowPrice,
           'available': userBalance
@@ -1383,7 +1410,8 @@ class CheckInService {
       }
 
       // Kullanıcı bilgilerini al
-      final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      final userDoc =
+          await _firestore.collection('users').doc(currentUser.uid).get();
       final userData = userDoc.data();
       final userName = userData?['name'] ?? 'İsimsiz';
       final userPhoto = userData?['photos']?[0];
@@ -1398,7 +1426,9 @@ class CheckInService {
           .collection('daily_mayors')
           .where('venueId', isEqualTo: venueId)
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .where('date', isLessThan: Timestamp.fromDate(startOfDay.add(const Duration(days: 1))))
+          .where('date',
+              isLessThan:
+                  Timestamp.fromDate(startOfDay.add(const Duration(days: 1))))
           .get();
 
       int totalDiamondsSpent = buyNowPrice; // Varsayılan: sadece buy now fiyatı
@@ -1412,8 +1442,7 @@ class CheckInService {
         // Eğer aynı kullanıcıysa önceki elmasları da ekle
         if (existingUserId == currentUser.uid) {
           totalDiamondsSpent = existingDiamondCount + buyNowPrice;
-        } else {
-        }
+        } else {}
       }
 
       // Buy Now ile direkt muhtar ol (mevcut muhtarın durumuna bakmadan)
@@ -1423,40 +1452,42 @@ class CheckInService {
       // Variables for notification (will be set in transaction)
       String? previousMayorId;
       int previousMayorDiamonds = 0;
-      
+
       await _firestore.runTransaction((transaction) async {
         // 1. User bakiyesini atomic olarak kontrol et
         final userRef = _firestore.collection('users').doc(currentUser.uid);
         final userSnapshot = await transaction.get(userRef);
-        
+
         if (!userSnapshot.exists) {
           throw Exception('User not found');
         }
-        
+
         final currentBalance = userSnapshot.data()!['diamonds'] ?? 0;
         if (currentBalance < buyNowPrice) {
-          throw Exception('Insufficient diamonds for Buy Now: $currentBalance < $buyNowPrice');
+          throw Exception(
+              'Insufficient diamonds for Buy Now: $currentBalance < $buyNowPrice');
         }
-        
+
         // 2. Mayor kaydını atomic olarak kontrol et ve FRESH fiyat hesapla
         final mayorRef = _firestore.collection('daily_mayors').doc(mayorDocId);
         final mayorSnapshot = await transaction.get(mayorRef);
-        
+
         // 🚨 FRESH PRICE CALCULATION: Panel açık kaldığında eski fiyat kullanılmasını önle
         String? currentMayorUserId;
         int currentMayorDiamonds = 0;
         int actualRequiredBuyNowPrice = 5 * 2; // Default: minimum price x 2
-        
+
         if (mayorSnapshot.exists) {
           final existingMayorData = mayorSnapshot.data()!;
           currentMayorUserId = existingMayorData['userId'] ?? '';
           currentMayorDiamonds = existingMayorData['diamondsSpent'] ?? 0;
-          final existingMayorType = existingMayorData['mayorType'] ?? 'first_checkin';
-          
+          final existingMayorType =
+              existingMayorData['mayorType'] ?? 'first_checkin';
+
           // Set values for notification
           previousMayorId = currentMayorUserId;
           previousMayorDiamonds = currentMayorDiamonds;
-          
+
           // Fresh Buy Now fiyat hesaplama
           if (existingMayorType == 'diamond') {
             actualRequiredBuyNowPrice = currentMayorDiamonds * 2;
@@ -1465,24 +1496,25 @@ class CheckInService {
             actualRequiredBuyNowPrice = 5 * 2; // 10 elmas
           }
         }
-        
-        
+
         // 🚨 PRICE VALIDATION: UI'dan gelen fiyat ile gerçek fiyat eşleşmeli
         if (buyNowPrice != actualRequiredBuyNowPrice) {
-          throw Exception('Price changed! UI shows $buyNowPrice diamonds, but current price is $actualRequiredBuyNowPrice diamonds. Please refresh and try again.');
+          throw Exception(
+              'Price changed! UI shows $buyNowPrice diamonds, but current price is $actualRequiredBuyNowPrice diamonds. Please refresh and try again.');
         }
-        
+
         // Kullanıcının yeterli elması var mı kontrol et (fresh price ile)
         if (currentBalance < actualRequiredBuyNowPrice) {
-          throw Exception('Insufficient diamonds for Buy Now: $currentBalance < $actualRequiredBuyNowPrice');
+          throw Exception(
+              'Insufficient diamonds for Buy Now: $currentBalance < $actualRequiredBuyNowPrice');
         }
-        
+
         // Final diamond calculation
         int finalTotalDiamonds = actualRequiredBuyNowPrice;
         if (currentMayorUserId == currentUser.uid) {
           finalTotalDiamonds = currentMayorDiamonds + actualRequiredBuyNowPrice;
         }
-        
+
         // 🚨 CRITICAL RACE CONDITION FIX: Buy Now için conditional write
         // Eğer başka biri aynı anda daha fazla elmasla muhtar olduysa transaction fail etsin
         final conditionalMayorData = {
@@ -1507,30 +1539,33 @@ class CheckInService {
           'actualChargedPrice': actualRequiredBuyNowPrice,
           'isUpgrade': currentMayorUserId == currentUser.uid,
         };
-        
+
         // 🔥 CONDITIONAL WRITE: Sadece mayor document'ı değişmemişse yazma işlemini yap
         if (mayorSnapshot.exists) {
           final currentData = mayorSnapshot.data()!;
           final currentDiamonds = currentData['diamondsSpent'] ?? 0;
           final currentUserId = currentData['userId'] ?? '';
-          
+
           // Başka biri aynı anda daha fazla elmasla muhtar olduysa transaction'ı reddet
-          if (currentUserId != currentMayorUserId || currentDiamonds != currentMayorDiamonds) {
-            throw Exception('RACE CONDITION DETECTED: Another user became mayor during this transaction. Current mayor: $currentUserId (was: $currentMayorUserId), diamonds: $currentDiamonds (was: $currentMayorDiamonds)');
+          if (currentUserId != currentMayorUserId ||
+              currentDiamonds != currentMayorDiamonds) {
+            throw Exception(
+                'RACE CONDITION DETECTED: Another user became mayor during this transaction. Current mayor: $currentUserId (was: $currentMayorUserId), diamonds: $currentDiamonds (was: $currentMayorDiamonds)');
           }
         }
-        
+
         // 3. Diamond balance güncelle (validated fresh price ile)
         transaction.update(userRef, {
           'diamonds': currentBalance - actualRequiredBuyNowPrice,
           'lastDiamondUpdate': FieldValue.serverTimestamp(),
         });
-        
+
         // 4. Mayor kaydını atomic olarak güncelle (conditional)
         transaction.set(mayorRef, conditionalMayorData);
-        
+
         // 5. Buy Now transaction log (enhanced with race condition protection)
-        final transactionRef = _firestore.collection('diamond_transactions').doc();
+        final transactionRef =
+            _firestore.collection('diamond_transactions').doc();
         transaction.set(transactionRef, {
           'userId': currentUser.uid,
           'venueId': venueId,
@@ -1545,14 +1580,17 @@ class CheckInService {
           'replacedMayorDiamonds': currentMayorDiamonds,
           'uiProvidedPrice': buyNowPrice,
           'actualChargedPrice': actualRequiredBuyNowPrice,
-          'priceValidation': buyNowPrice == actualRequiredBuyNowPrice ? 'PASSED' : 'FAILED',
+          'priceValidation':
+              buyNowPrice == actualRequiredBuyNowPrice ? 'PASSED' : 'FAILED',
           'isAtomic': true,
           'isBuyNow': true,
           'raceConditionProtected': true,
         });
-        
+
         // 6. Mayor transaction log (conflict detection için)
-        final mayorLogRef = _firestore.collection('mayor_transaction_logs').doc(transactionRef.id);
+        final mayorLogRef = _firestore
+            .collection('mayor_transaction_logs')
+            .doc(transactionRef.id);
         transaction.set(mayorLogRef, {
           'venueId': venueId,
           'userId': currentUser.uid,
@@ -1565,14 +1603,14 @@ class CheckInService {
           'isAtomic': true,
           'raceConditionProtected': true,
         });
-        
       });
 
       // � STEP 2: Send notifications for mayorship change
       try {
         // Send notification to previous mayor if they existed
         if (previousMayorId != null && previousMayorId != currentUser.uid) {
-          String mayorType = (previousMayorDiamonds == 0) ? 'first_checkin' : 'diamond';
+          String mayorType =
+              (previousMayorDiamonds == 0) ? 'first_checkin' : 'diamond';
           await NotificationService.sendMayorLostNotification(
             toUserId: previousMayorId!,
             venueName: venueName,
@@ -1600,22 +1638,21 @@ class CheckInService {
 
       return {'success': true};
     } catch (e) {
-      
       // 🚨 RACE CONDITION ERROR HANDLING
       if (e.toString().contains('RACE CONDITION DETECTED')) {
         return {'success': false, 'error': 'race_condition_detected'};
       }
-      
-      // 🚨 PRICE CHANGE ERROR HANDLING  
+
+      // 🚨 PRICE CHANGE ERROR HANDLING
       if (e.toString().contains('Price changed!')) {
         return {'success': false, 'error': 'price_changed'};
       }
-      
+
       // 🚨 INSUFFICIENT DIAMONDS
       if (e.toString().contains('Insufficient diamonds')) {
         return {'success': false, 'error': 'insufficient_diamonds'};
       }
-      
+
       return {'success': false, 'error': 'purchase_failed'};
     }
   }
@@ -1631,7 +1668,8 @@ class CheckInService {
           .collection('check_ins')
           .where('userId', isEqualTo: userId)
           .where('venueId', isEqualTo: venueId)
-          .where('checkInTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('checkInTime',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('checkInTime', isLessThan: Timestamp.fromDate(endOfDay))
           .limit(1)
           .get();
@@ -1641,13 +1679,14 @@ class CheckInService {
       return false;
     }
   }
+
   Future<int> getUserDiamondBalance(String userId) async {
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
       if (userDoc.exists) {
         final userData = userDoc.data();
         final diamonds = userData?['diamonds'] ?? 0;
-        
+
         return diamonds;
       }
       return 0;
@@ -1657,8 +1696,9 @@ class CheckInService {
   }
 
   // Fotoğrafsız check-in
-  Future<bool> performCheckInWithoutPhoto(Venue venue, Set<String> userCheckedInVenues) async {
-    
+  Future<bool> performCheckInWithoutPhoto(
+      Venue venue, Set<String> userCheckedInVenues,
+      {LatLng? currentPosition}) async {
     try {
       final user = _auth.currentUser;
       if (user == null) {
@@ -1671,21 +1711,44 @@ class CheckInService {
         throw cooldownStatus.message;
       }
 
+      // 📍 MESAFE KONTROLÜ: 200 metre içinde olmak zorunlu
+      if (currentPosition != null) {
+        final distance = _calculateDistance(currentPosition, venue.location);
+        if (distance > 15.0) {
+          throw 'Check-in yapmak için mekana yakın olmanız gerekiyor! (${distance.toStringAsFixed(0)}m uzakta)';
+        }
+      }
+
+      // 📅 GÜNLÜK TEKRAR KONTROLÜ: Bugün aynı mekana zaten check-in yapıldı mı?
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      final todayEnd = todayStart.add(const Duration(days: 1));
+      final existingCheckIn = await _firestore
+          .collection('check_ins')
+          .where('userId', isEqualTo: _auth.currentUser!.uid)
+          .where('venueId', isEqualTo: venue.id)
+          .where('checkInTime', isGreaterThan: Timestamp.fromDate(todayStart))
+          .where('checkInTime', isLessThan: Timestamp.fromDate(todayEnd))
+          .limit(1)
+          .get();
+      if (existingCheckIn.docs.isNotEmpty) {
+        throw 'Bu mekana bugün zaten check-in yaptınız!';
+      }
 
       // Firebase'e check-in dokümanı kaydet
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final docRef = await _firestore.collection('check_ins').add({
         'userId': user.uid,
         'venueId': venue.id,
         'venueName': venue.name,
         'checkInTime': FieldValue.serverTimestamp(),
-        'date': today, // Elmas muhtar kontrolü için gerekli
+        'date': todayStr, // Elmas muhtar kontrolü için gerekli
         'latitude': venue.location.latitude,
         'longitude': venue.location.longitude,
         'fromFavorite': false,
         'hasPhoto': false,
+        'isInitialRegistration': false, // Normal check-in (cooldown'a dahil)
       });
-
 
       // 🔄 YENİ: Discover sistemi için check-in'i history'e de kaydet (30 gün saklansın)
       try {
@@ -1701,7 +1764,8 @@ class CheckInService {
           'hasPhoto': false,
           'originalCheckInId': docRef.id,
           'forDiscoverMatching': true,
-          'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
+          'expiresAt':
+              Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
         });
       } catch (historyError) {
         // Check-in devam etsin, sadece discover history kaydetme başarısız oldu
@@ -1709,25 +1773,25 @@ class CheckInService {
 
       // User check-in listesini güncelle
       userCheckedInVenues.add(venue.id);
-      
+
       // Kullanıcı bilgilerini al
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final userData = userDoc.data();
       final userName = userData?['name'] ?? 'İsimsiz';
       final userPhoto = userData?['mainPhoto'];
       final userAge = userData?['age'] ?? 25;
-      
+
       // Kullanıcının totalCheckIns sayısını artır
       try {
         await _firestore.collection('users').doc(user.uid).update({
           'totalCheckIns': FieldValue.increment(1),
           'lastCheckInDate': FieldValue.serverTimestamp(),
         });
-      } catch (statsError) {
-      }
-      
+      } catch (statsError) {}
+
       // Günlük muhtar kontrolü ve ataması
-      await checkAndAssignDailyMayor(venue.id, user.uid, userName, userPhoto, venueName: venue.name);
+      await checkAndAssignDailyMayor(venue.id, user.uid, userName, userPhoto,
+          venueName: venue.name);
 
       // Feed post oluştur
       await createFeedPost(
@@ -1745,8 +1809,8 @@ class CheckInService {
       );
 
       return true;
-      
     } catch (e) {
+      if (e is String) rethrow;
       return false;
     }
   }
@@ -1754,13 +1818,11 @@ class CheckInService {
   // Fotoğraflı check-in için direkt kamera aç (CROP ile) - iOS için geliştirilmiş
   Future<File?> selectImageFromCamera(context) async {
     try {
-      
       // Önce izin durumunu kontrol et
       final initialPermissionStatus = await Permission.camera.status;
-      
+
       // iOS özel kontroller
       if (Platform.isIOS) {
-        
         // iOS'ta farklı permission state'lerini kontrol et
         switch (initialPermissionStatus) {
           case PermissionStatus.denied:
@@ -1777,7 +1839,7 @@ class CheckInService {
             break;
         }
       }
-      
+
       // Direkt kamera aç ve crop et
       final File? croppedImage = await ImagePickerService.pickAndCropImage(
         context: context,
@@ -1789,34 +1851,30 @@ class CheckInService {
           CropAspectRatioPreset.ratio16x9,
         ],
       );
-      
+
       if (croppedImage == null) {
-        
         // Permission durumunu tekrar kontrol et
         final finalPermissionStatus = await Permission.camera.status;
-        
+
         // iOS özel hata analizi
         if (Platform.isIOS) {
-          
-          if (initialPermissionStatus == PermissionStatus.denied && 
-              finalPermissionStatus == PermissionStatus.denied) {
-          }
+          if (initialPermissionStatus == PermissionStatus.denied &&
+              finalPermissionStatus == PermissionStatus.denied) {}
         }
-        
+
         // Eğer izin alma denemesi sonrası durum değiştiyse, son durumu kullan
         PermissionStatus statusToCheck = finalPermissionStatus;
-        
+
         // Eğer initial denied idi ve şimdi hala denied ise, büyük ihtimalle permanently denied
-        if (initialPermissionStatus == PermissionStatus.denied && 
+        if (initialPermissionStatus == PermissionStatus.denied &&
             finalPermissionStatus == PermissionStatus.denied) {
           statusToCheck = PermissionStatus.permanentlyDenied;
         }
-        
+
         // İzin durumuna göre uygun popup göster
         if (statusToCheck != PermissionStatus.granted) {
           await _handlePermissionError(context, statusToCheck);
-        } else {
-        }
+        } else {}
         return null;
       } else {
         // File size kontrolü
@@ -1824,15 +1882,12 @@ class CheckInService {
         return croppedImage;
       }
     } catch (e) {
-      
       // iOS özel hata analizi
       if (Platform.isIOS) {
-        if (e.toString().contains('permission')) {
-        }
-        if (e.toString().contains('cancelled')) {
-        }
+        if (e.toString().contains('permission')) {}
+        if (e.toString().contains('cancelled')) {}
       }
-      
+
       // Hata durumunda da permission check yap
       try {
         final permissionStatus = await Permission.camera.status;
@@ -1851,8 +1906,9 @@ class CheckInService {
   }
 
   // Fotoğraflı check-in gerçekleştir
-  Future<bool> performCheckInWithPhoto(Venue venue, File image, Set<String> userCheckedInVenues) async {
-    
+  Future<bool> performCheckInWithPhoto(
+      Venue venue, File image, Set<String> userCheckedInVenues,
+      {LatLng? currentPosition}) async {
     try {
       final user = _auth.currentUser;
       if (user == null) {
@@ -1865,45 +1921,65 @@ class CheckInService {
         throw cooldownStatus.message;
       }
 
+      // 📍 MESAFE KONTROLÜ: 200 metre içinde olmak zorunlu
+      if (currentPosition != null) {
+        final distance = _calculateDistance(currentPosition, venue.location);
+        if (distance > 15.0) {
+          throw 'Check-in yapmak için mekana yakın olmanız gerekiyor! (${distance.toStringAsFixed(0)}m uzakta)';
+        }
+      }
+
+      // 📅 GÜNLÜK TEKRAR KONTROLÜ: Bugün aynı mekana zaten check-in yapıldı mı?
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      final todayEnd = todayStart.add(const Duration(days: 1));
+      final existingCheckIn = await _firestore
+          .collection('check_ins')
+          .where('userId', isEqualTo: user.uid)
+          .where('venueId', isEqualTo: venue.id)
+          .where('checkInTime', isGreaterThan: Timestamp.fromDate(todayStart))
+          .where('checkInTime', isLessThan: Timestamp.fromDate(todayEnd))
+          .limit(1)
+          .get();
+      if (existingCheckIn.docs.isNotEmpty) {
+        throw 'Bu mekana bugün zaten check-in yaptınız!';
+      }
 
       // 1. Önce kullanıcı bilgilerini al
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (!userDoc.exists) {
         return false;
       }
-      
+
       final userData = userDoc.data()!;
       final userName = userData['name'] ?? 'İsimsiz';
       final userPhoto = userData['mainPhoto'];
       final userAge = userData['age'] ?? 25;
-      
 
       // 2. Fotoğrafı Firebase Storage'a upload et (check-in öncesi)
       String? imageUrl;
       try {
         imageUrl = await uploadImageToStorage(image, user.uid);
         if (imageUrl != null) {
-        } else {
-        }
-      } catch (uploadError) {
-      }
+        } else {}
+      } catch (uploadError) {}
 
       // 3. Firebase'e check-in dokümanı kaydet (fotoğraf ile)
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final docRef = await _firestore.collection('check_ins').add({
         'userId': user.uid,
         'venueId': venue.id,
         'venueName': venue.name,
         'checkInTime': FieldValue.serverTimestamp(),
-        'date': today, // Elmas muhtar kontrolü için gerekli
+        'date': todayStr, // Elmas muhtar kontrolü için gerekli
         'latitude': venue.location.latitude,
         'longitude': venue.location.longitude,
         'fromFavorite': false,
         'hasPhoto': true,
         'photoPath': image.path, // Local path
         'photoUrl': imageUrl, // Firebase Storage URL (null olabilir)
+        'isInitialRegistration': false, // Normal check-in (cooldown'a dahil)
       });
-
 
       // 4. Photo check-in'i discover sistemi için history'e de kaydet
       try {
@@ -1912,7 +1988,7 @@ class CheckInService {
           'venueId': venue.id,
           'venueName': venue.name,
           'checkInTime': FieldValue.serverTimestamp(),
-          'date': today,
+          'date': todayStr,
           'latitude': venue.location.latitude,
           'longitude': venue.location.longitude,
           'fromFavorite': false,
@@ -1921,7 +1997,8 @@ class CheckInService {
           'photoUrl': imageUrl,
           'originalCheckInId': docRef.id,
           'forDiscoverMatching': true,
-          'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
+          'expiresAt':
+              Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
         });
       } catch (historyError) {
         // Check-in devam etsin, sadece discover history kaydetme başarısız oldu
@@ -1929,21 +2006,20 @@ class CheckInService {
 
       // 5. User check-in listesini güncelle
       userCheckedInVenues.add(venue.id);
-      
+
       // 6. Kullanıcının totalCheckIns sayısını artır
       try {
         await _firestore.collection('users').doc(user.uid).update({
           'totalCheckIns': FieldValue.increment(1),
           'lastCheckInDate': FieldValue.serverTimestamp(),
         });
-      } catch (statsError) {
-      }
-      
+      } catch (statsError) {}
+
       // 7. Günlük muhtar kontrolü ve ataması
       try {
-        await checkAndAssignDailyMayor(venue.id, user.uid, userName, userPhoto, venueName: venue.name);
-      } catch (mayorError) {
-      }
+        await checkAndAssignDailyMayor(venue.id, user.uid, userName, userPhoto,
+            venueName: venue.name);
+      } catch (mayorError) {}
 
       // 8. Feed post oluştur (fotoğraf ile)
       try {
@@ -1961,11 +2037,9 @@ class CheckInService {
           postImage: imageUrl, // Firebase Storage URL (null olabilir)
           caption: '${venue.name} mekanına fotoğraflı check-in yaptı',
         );
-      } catch (feedError) {
-      }
+      } catch (feedError) {}
 
       return true;
-      
     } catch (e) {
       return false;
     }

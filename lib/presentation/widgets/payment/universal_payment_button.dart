@@ -89,15 +89,15 @@ class _UniversalPaymentButtonState extends State<UniversalPaymentButton> {
       }
     }
     
-    // Super like paketleri (PaymentType.superlike)
+    // Super Chat paketleri (PaymentType.superlike — Super Chat için kullanılıyor)
     if (widget.package.type == PaymentType.superlike) {
       switch (widget.package.amount) {
         case 3:
-          return 'super_likes_3';
+          return 'super_chats_3';  // ✅ super_likes → super_chats
         case 10:
-          return 'super_likes_10';
+          return 'super_chats_10';
         case 25:
-          return 'super_likes_25';
+          return 'super_chats_25';
         default:
           return null;
       }

@@ -54,7 +54,7 @@ android {
     defaultConfig {
         applicationId = "com.lovenme.app"
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
@@ -85,8 +85,8 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     
-    // ✅ Google Play Billing Library (for In-App Purchases)
-    implementation("com.android.billingclient:billing:6.0.1")
+    // ✅ Google Play Billing Library (for In-App Purchases) — v7.x Play Console zorunluluğu
+    implementation("com.android.billingclient:billing:7.1.1")
     
     // ✅ Google Play Services Base (for IAP support)
     implementation("com.google.android.gms:play-services-base:18.2.0")

@@ -21,66 +21,63 @@ class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
 
   @override
-  ConsumerState<ProfileSettingsPage> createState() => _ProfileSettingsPageState();
+  ConsumerState<ProfileSettingsPage> createState() =>
+      _ProfileSettingsPageState();
 }
 
 class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   // Production Components
   late final LoadingStateManager _loadingManager;
-  
+
   // Ayarlar - varsayılan değerler
   bool mapVisibility = true;
   bool profileActive = true;
   bool notifications = true;
   bool matchNotifications = true;
   bool messageNotifications = true;
-  
+
   // Cinsiyet tercihleri (Eşleşme için)
   List<String> genderPreferences = [];
   final List<String> preferenceOptions = ['Erkek', 'Kadın', 'Diğer'];
-  
+
   // Kullanıcı bilgileri
   Map<String, dynamic>? userData;
   bool isLoading = true;
   bool isPremium = false;
   List<String> blockedUsers = [];
-  
+
   @override
   void initState() {
     super.initState();
     _loadingManager = LoadingStateManager();
     _loadUserSettings();
   }
-  
+
   @override
   void dispose() {
     _loadingManager.dispose();
     FormValidationHelper.dispose();
     super.dispose();
   }
-  
+
   // KULLANICI AYARLARINI YÜKLE
   Future<void> _loadUserSettings() async {
     try {
       setState(() => isLoading = true);
-      
+
       final user = _auth.currentUser;
       if (user != null) {
-        
-        final doc = await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        
+        final doc = await _firestore.collection('users').doc(user.uid).get();
+
         if (doc.exists) {
           final data = doc.data()!;
-          
+
           setState(() {
             userData = data;
-            
+
             // Ayarları yükle - null kontrolü ile
             mapVisibility = data['mapVisibility'] ?? true;
             profileActive = data['profileActive'] ?? true;
@@ -88,15 +85,16 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             matchNotifications = data['matchNotifications'] ?? true;
             messageNotifications = data['messageNotifications'] ?? true;
             isPremium = data['isPremium'] ?? false;
-            
+
             // Cinsiyet tercihleri
-            if (data['genderPreferences'] != null && data['genderPreferences'] is List) {
+            if (data['genderPreferences'] != null &&
+                data['genderPreferences'] is List) {
               genderPreferences = List<String>.from(data['genderPreferences']);
             } else {
               // Varsayılan olarak herkesi göster
               genderPreferences = ['Erkek', 'Kadın', 'Diğer'];
             }
-            
+
             // Engellenen kullanıcılar
             if (data['blockedUsers'] != null && data['blockedUsers'] is List) {
               blockedUsers = List<String>.from(data['blockedUsers']);
@@ -118,7 +116,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       setState(() => isLoading = false);
     }
   }
-  
+
   // AYARLARI KAYDET
   // AYARLARI KAYDET - LoadingStateManager ile güncellenmiş
   Future<void> _saveSettings() async {
@@ -129,21 +127,20 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         if (user == null) {
           throw 'Kullanıcı oturumu bulunamadı';
         }
-        
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .set({
-          'mapVisibility': mapVisibility,
-          'profileActive': profileActive,
-          'notifications': notifications,
-          'matchNotifications': matchNotifications,
-          'messageNotifications': messageNotifications,
-          'genderPreferences': genderPreferences, // Cinsiyet tercihleri
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true)); // merge: true ile mevcut verileri koruyoruz
-        
-        
+
+        await _firestore.collection('users').doc(user.uid).set(
+            {
+              'mapVisibility': mapVisibility,
+              'profileActive': profileActive,
+              'notifications': notifications,
+              'matchNotifications': matchNotifications,
+              'messageNotifications': messageNotifications,
+              'genderPreferences': genderPreferences, // Cinsiyet tercihleri
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(
+                merge: true)); // merge: true ile mevcut verileri koruyoruz
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -167,7 +164,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       },
     );
   }
-  
+
   // CİNSİYET TERCİHLERİ DİYALOGU
   void _showGenderPreferencesDialog() {
     showDialog(
@@ -210,7 +207,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('En az bir tercih seçili olmalı'),
+                                  content:
+                                      Text('En az bir tercih seçili olmalı'),
                                   backgroundColor: AppColors.warning,
                                   duration: Duration(seconds: 1),
                                 ),
@@ -236,14 +234,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       });
                     },
                     icon: Icon(
-                      genderPreferences.length == 3 
-                          ? Icons.check_box 
+                      genderPreferences.length == 3
+                          ? Icons.check_box
                           : Icons.check_box_outline_blank,
                       color: AppColors.primary,
                     ),
                     label: Text(
-                      genderPreferences.length == 3 
-                          ? 'Tümünü Kaldır' 
+                      genderPreferences.length == 3
+                          ? 'Tümünü Kaldır'
                           : 'Tümünü Seç',
                       style: const TextStyle(color: AppColors.primary),
                     ),
@@ -266,7 +264,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                     _saveSettings(); // Firebase'e kaydet
                     Navigator.pop(context);
                   },
-                  isLoading: _loadingManager.isLoading('save_gender_preferences'),
+                  isLoading:
+                      _loadingManager.isLoading('save_gender_preferences'),
                   width: 100,
                   height: 40,
                 ),
@@ -277,7 +276,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       },
     );
   }
-  
+
   // EMAIL DEĞİŞTİR
   void _showChangeEmailDialog() {
     final TextEditingController emailController = TextEditingController();
@@ -285,89 +284,105 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final TextEditingController codeController = TextEditingController();
     bool showCodeInput = false;
     String? pendingEmail;
-    
+
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text(showCodeInput ? 'Doğrulama Kodu' : 'Email Değiştir'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!showCodeInput) ...[
-                  TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Yeni Email',
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Mevcut Şifren',
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                  ),
-                ] else ...[
-                  Text(
-                    'Doğrulama kodu ${emailController.text} adresine gönderildi.',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: codeController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '6 haneli doğrulama kodu',
-                      prefixIcon: Icon(Icons.security),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('İptal'),
+      builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
+        return AlertDialog(
+          title: Text(showCodeInput ? 'Doğrulama Kodu' : 'Email Değiştir'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          content: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.6,
+                minWidth: MediaQuery.of(context).size.width * 0.7,
               ),
-              if (!showCodeInput)
-                ProductionButton(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!showCodeInput) ...[
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Yeni Email',
+                        prefixIcon: Icon(Icons.email),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Mevcut Şifren',
+                        prefixIcon: Icon(Icons.lock),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      'Doğrulama kodu ${emailController.text} adresine gönderildi.',
+                      style: const TextStyle(fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: codeController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: const InputDecoration(
+                        labelText: '6 haneli doğrulama kodu',
+                        prefixIcon: Icon(Icons.security),
+                        border: OutlineInputBorder(),
+                        counterText: '',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            const SizedBox(width: 8),
+            if (!showCodeInput)
+              Flexible(
+                child: ProductionButton(
                   text: 'Kod Gönder',
                   onPressed: () async {
                     // Kod gönderme işlemi
-                    await _sendEmailChangeCode(
-                      emailController.text,
-                      passwordController.text,
-                      setDialogState,
-                      () {
-                        setDialogState(() {
-                          showCodeInput = true;
-                          pendingEmail = emailController.text;
-                        });
-                      }
-                    );
+                    await _sendEmailChangeCode(emailController.text,
+                        passwordController.text, setDialogState, () {
+                      setDialogState(() {
+                        showCodeInput = true;
+                        pendingEmail = emailController.text;
+                      });
+                    });
                   },
                   isLoading: _loadingManager.isLoading('send_code'),
                   width: 120,
                   height: 40,
-                )
-              else
-                ProductionButton(
+                ),
+              )
+            else
+              Flexible(
+                child: ProductionButton(
                   text: 'Doğrula',
-                  onPressed: () => _verifyEmailChange(codeController.text, pendingEmail!),
+                  onPressed: () =>
+                      _verifyEmailChange(codeController.text, pendingEmail!),
                   isLoading: _loadingManager.isLoading('verify_email'),
                   width: 120,
                   height: 40,
                 ),
-            ],
-          );
-        }
-      ),
+              ),
+          ],
+        );
+      }),
     );
   }
 
@@ -391,7 +406,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         if (password.trim().isEmpty) {
           throw 'Mevcut şifrenizi girin';
         }
-        
+
         final user = _auth.currentUser;
         if (user == null || user.email == null) {
           throw 'Kullanıcı oturumu bulunamadı';
@@ -401,19 +416,22 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         if (user.email!.toLowerCase() == newEmail.toLowerCase()) {
           throw 'Yeni email adresi mevcut adresinizle aynı';
         }
-        
+
         // Yeniden kimlik doğrulama
         final credential = EmailAuthProvider.credential(
           email: user.email!,
           password: password,
         );
         await user.reauthenticateWithCredential(credential);
-        
+
         // 6 haneli kod üret
-        final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-        
+        final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000))
+            .toString();
+
         // Cloud Function ile kod gönder
-        final result = await FirebaseFunctions.instance.httpsCallable('sendEmailChangeVerification').call({
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('sendEmailChangeVerification')
+            .call({
           'newEmail': newEmail,
           'code': code,
           'userName': userData?['name'] ?? 'Kullanıcı',
@@ -428,9 +446,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             'createdAt': FieldValue.serverTimestamp(),
             'expiresAt': DateTime.now().add(const Duration(minutes: 10)),
           });
-          
+
           onSuccess();
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Doğrulama kodu gönderildi!'),
@@ -443,13 +461,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       },
       onError: (error) {
         String errorMessage = 'Kod gönderilemedi. Lütfen tekrar deneyiniz.';
-        
+
         if (error.toString().contains('email-already-in-use')) {
-          errorMessage = 'Bu email adresi zaten başka bir hesap tarafından kullanılıyor.';
+          errorMessage =
+              'Bu email adresi zaten başka bir hesap tarafından kullanılıyor.';
         } else if (error.toString().contains('wrong-password')) {
           errorMessage = 'Mevcut şifreniz yanlış.';
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -475,7 +494,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             .collection('email_verifications')
             .doc(user.uid)
             .get();
-            
+
         if (!verificationDoc.exists) {
           throw 'Doğrulama kodu bulunamadı. Lütfen tekrar kod talep edin.';
         }
@@ -495,7 +514,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
         // Email'i güncelle
         await user.verifyBeforeUpdateEmail(newEmail);
-        
+
         // Firestore'da güncelle
         await _firestore.collection('users').doc(user.uid).update({
           'email': newEmail,
@@ -504,16 +523,20 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         });
 
         // Doğrulama kodunu sil
-        await _firestore.collection('email_verifications').doc(user.uid).delete();
-        
+        await _firestore
+            .collection('email_verifications')
+            .doc(user.uid)
+            .delete();
+
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Email güncellendi! Firebase doğrulama emaili de gönderildi.'),
+            content: Text(
+                'Email güncellendi! Firebase doğrulama emaili de gönderildi.'),
             backgroundColor: AppColors.success,
           ),
         );
-        
+
         setState(() {
           _loadUserSettings();
         });
@@ -528,79 +551,102 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       },
     );
   }
-  
+
   // ŞİFRE DEĞİŞTİR
   void _showChangePasswordDialog() {
-    final TextEditingController currentPasswordController = TextEditingController();
+    final TextEditingController currentPasswordController =
+        TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
-    final TextEditingController confirmPasswordController = TextEditingController();
+    final TextEditingController confirmPasswordController =
+        TextEditingController();
     final TextEditingController codeController = TextEditingController();
     bool showCodeInput = false;
-    
+
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text(showCodeInput ? 'Doğrulama Kodu' : 'Şifre Değiştir'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!showCodeInput) ...[
-                  TextField(
-                    controller: currentPasswordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Mevcut Şifre',
-                      prefixIcon: Icon(Icons.lock_outline),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: newPasswordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Yeni Şifre',
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: confirmPasswordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Yeni Şifre (Tekrar)',
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                  ),
-                ] else ...[
-                  const Text(
-                    'Doğrulama kodu email adresinize gönderildi.',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: codeController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '6 haneli doğrulama kodu',
-                      prefixIcon: Icon(Icons.security),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('İptal'),
+      builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
+        return AlertDialog(
+          title: Text(showCodeInput ? 'Doğrulama Kodu' : 'Şifre Değiştir'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          content: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.65,
+                minWidth: MediaQuery.of(context).size.width * 0.7,
               ),
-              if (!showCodeInput)
-                ProductionButton(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!showCodeInput) ...[
+                    TextField(
+                      controller: currentPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Mevcut Şifre',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: newPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Yeni Şifre',
+                        prefixIcon: Icon(Icons.lock),
+                        border: OutlineInputBorder(),
+                        helperText: 'En az 6 karakter',
+                        helperMaxLines: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: confirmPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Yeni Şifre (Tekrar)',
+                        prefixIcon: Icon(Icons.lock),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'Doğrulama kodu email adresinize gönderildi.',
+                      style: TextStyle(fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: codeController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: const InputDecoration(
+                        labelText: '6 haneli doğrulama kodu',
+                        prefixIcon: Icon(Icons.security),
+                        border: OutlineInputBorder(),
+                        counterText: '',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            const SizedBox(width: 8),
+            if (!showCodeInput)
+              Flexible(
+                child: ProductionButton(
                   text: 'Kod Gönder',
                   onPressed: () async {
                     // Şifre eşleştirme kontrolü
-                    if (newPasswordController.text != confirmPasswordController.text) {
+                    if (newPasswordController.text !=
+                        confirmPasswordController.text) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Şifreler eşleşmiyor!'),
@@ -609,35 +655,36 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       );
                       return;
                     }
-                    
+
                     // Kod gönderme işlemi
                     await _sendPasswordChangeCode(
-                      currentPasswordController.text,
-                      newPasswordController.text,
-                      setDialogState,
-                      () {
-                        setDialogState(() {
-                          showCodeInput = true;
-                        });
-                      }
-                    );
+                        currentPasswordController.text,
+                        newPasswordController.text,
+                        setDialogState, () {
+                      setDialogState(() {
+                        showCodeInput = true;
+                      });
+                    });
                   },
                   isLoading: _loadingManager.isLoading('send_password_code'),
                   width: 120,
                   height: 40,
-                )
-              else
-                ProductionButton(
+                ),
+              )
+            else
+              Flexible(
+                child: ProductionButton(
                   text: 'Doğrula',
-                  onPressed: () => _verifyPasswordChange(codeController.text, newPasswordController.text),
+                  onPressed: () => _verifyPasswordChange(
+                      codeController.text, newPasswordController.text),
                   isLoading: _loadingManager.isLoading('verify_password'),
                   width: 120,
                   height: 40,
                 ),
-            ],
-          );
-        }
-      ),
+              ),
+          ],
+        );
+      }),
     );
   }
 
@@ -661,24 +708,27 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         if (newPassword.length < 6) {
           throw 'Yeni şifre en az 6 karakter olmalıdır';
         }
-        
+
         final user = _auth.currentUser;
         if (user == null || user.email == null) {
           throw 'Kullanıcı oturumu bulunamadı';
         }
-        
+
         // Yeniden kimlik doğrulama
         final credential = EmailAuthProvider.credential(
           email: user.email!,
           password: currentPassword,
         );
         await user.reauthenticateWithCredential(credential);
-        
+
         // 6 haneli kod üret
-        final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-        
+        final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000))
+            .toString();
+
         // Cloud Function ile kod gönder
-        final result = await FirebaseFunctions.instance.httpsCallable('sendPasswordChangeVerification').call({
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('sendPasswordChangeVerification')
+            .call({
           'email': user.email!,
           'code': code,
           'userName': userData?['name'] ?? 'Kullanıcı',
@@ -686,16 +736,19 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
         if (result.data['success'] == true) {
           // Doğrulama kodunu geçici olarak sakla (10 dakika)
-          await _firestore.collection('password_verifications').doc(user.uid).set({
+          await _firestore
+              .collection('password_verifications')
+              .doc(user.uid)
+              .set({
             'code': code,
             'newPassword': newPassword,
             'userId': user.uid,
             'createdAt': FieldValue.serverTimestamp(),
             'expiresAt': DateTime.now().add(const Duration(minutes: 10)),
           });
-          
+
           onSuccess();
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Doğrulama kodu email adresinize gönderildi!'),
@@ -708,13 +761,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       },
       onError: (error) {
         String errorMessage = 'Kod gönderilemedi. Lütfen tekrar deneyiniz.';
-        
+
         if (error.toString().contains('wrong-password')) {
           errorMessage = 'Mevcut şifreniz yanlış.';
         } else if (error.toString().contains('weak-password')) {
           errorMessage = 'Yeni şifre çok zayıf.';
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -740,7 +793,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             .collection('password_verifications')
             .doc(user.uid)
             .get();
-            
+
         if (!verificationDoc.exists) {
           throw 'Doğrulama kodu bulunamadı. Lütfen tekrar kod talep edin.';
         }
@@ -762,8 +815,11 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         await user.updatePassword(storedPassword);
 
         // Doğrulama kodunu sil
-        await _firestore.collection('password_verifications').doc(user.uid).delete();
-        
+        await _firestore
+            .collection('password_verifications')
+            .doc(user.uid)
+            .delete();
+
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -782,327 +838,327 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       },
     );
   }
-  
+
   // ENGELLENEN KULLANICILAR
 // ENGELLENEN KULLANICILAR - RESPONSIVE VERSİYON
-void _showBlockedUsersDialog() async {
-  // Loading dialog
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => const Center(
-      child: CircularProgressIndicator(color: AppColors.primary),
-    ),
-  );
+  void _showBlockedUsersDialog() async {
+    // Loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
 
-  // Kullanıcı bilgilerini al
-  Map<String, Map<String, dynamic>> blockedUserData = {};
-  
-  for (String userId in blockedUsers) {
-    try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data()!;
-        String userName = data['name'] ?? 'İsimsiz';
-        
-        if (data['surname'] != null && data['surname'].toString().isNotEmpty) {
-          userName = '$userName ${data['surname']}';
+    // Kullanıcı bilgilerini al
+    Map<String, Map<String, dynamic>> blockedUserData = {};
+
+    for (String userId in blockedUsers) {
+      try {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final data = userDoc.data()!;
+          String userName = data['name'] ?? 'İsimsiz';
+
+          if (data['surname'] != null &&
+              data['surname'].toString().isNotEmpty) {
+            userName = '$userName ${data['surname']}';
+          }
+
+          String? photoUrl;
+          if (data['photos'] != null && (data['photos'] as List).isNotEmpty) {
+            photoUrl = data['photos'][0];
+          }
+
+          blockedUserData[userId] = {
+            'name': userName,
+            'photo': photoUrl,
+          };
+        } else {
+          blockedUserData[userId] = {
+            'name': 'Silinmiş Kullanıcı',
+            'photo': null,
+          };
         }
-        
-        String? photoUrl;
-        if (data['photos'] != null && (data['photos'] as List).isNotEmpty) {
-          photoUrl = data['photos'][0];
-        }
-        
+      } catch (e) {
         blockedUserData[userId] = {
-          'name': userName,
-          'photo': photoUrl,
-        };
-      } else {
-        blockedUserData[userId] = {
-          'name': 'Silinmiş Kullanıcı',
+          'name': 'Kullanıcı',
           'photo': null,
         };
       }
-    } catch (e) {
-      blockedUserData[userId] = {
-        'name': 'Kullanıcı',
-        'photo': null,
-      };
     }
-  }
-  
-  // Loading'i kapat
-  Navigator.pop(context);
-  
-  // Responsive dialog
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: Column(
-        children: [
-          // Üst çizgi
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 50,
-            height: 5,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(10),
-            ),
+
+    // Loading'i kapat
+    Navigator.pop(context);
+
+    // Responsive dialog
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
-          
-          // Başlık
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                const Icon(Icons.block, color: AppColors.error, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Engellenen Kullanıcılar (${blockedUsers.length})',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+        ),
+        child: Column(
+          children: [
+            // Üst çizgi
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+
+            // Başlık
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Icon(Icons.block, color: AppColors.error, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Engellenen Kullanıcılar (${blockedUsers.length})',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-          ),
-          
-          const Divider(height: 1),
-          
-          // İçerik
-          Expanded(
-            child: blockedUsers.isEmpty
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.block_outlined,
-                          size: 64,
-                          color: AppColors.grey400,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Henüz kimseyi engellemediniz',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.grey600,
+
+            const Divider(height: 1),
+
+            // İçerik
+            Expanded(
+              child: blockedUsers.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.block_outlined,
+                            size: 64,
+                            color: AppColors.grey400,
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: blockedUsers.length,
-                    itemBuilder: (context, index) {
-                      final userId = blockedUsers[index];
-                      final userData = blockedUserData[userId]!;
-                      final userName = userData['name'];
-                      final photoUrl = userData['photo'];
-                      
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.grey200,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
+                          SizedBox(height: 16),
+                          Text(
+                            'Henüz kimseyi engellemediniz',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: AppColors.grey600,
                             ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              // Profil resmi
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor: AppColors.error.withOpacity(0.1),
-                                backgroundImage: photoUrl != null 
-                                    ? NetworkImage(photoUrl) 
-                                    : null,
-                                child: photoUrl == null
-                                    ? const Icon(
-                                        Icons.person_off,
-                                        color: AppColors.error,
-                                      )
-                                    : null,
-                              ),
-                              
-                              const SizedBox(width: 12),
-                              
-                              // İsim - Flexible ile sarmalayarak taşmayı önle
-                              Expanded(
-                                child: Text(
-                                  userName,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              
-                              const SizedBox(width: 8),
-                              
-                              // Engeli kaldır butonu
-                              TextButton(
-                                onPressed: () async {
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Engeli Kaldır'),
-                                      content: Text(
-                                        '$userName kullanıcısının engelini '
-                                        'kaldırmak istediğinize emin misiniz?',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text('İptal'),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppColors.success,
-                                          ),
-                                          child: const Text('Kaldır'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  
-                                  if (confirm == true) {
-                                    Navigator.pop(context);
-                                    await _unblockUser(userId);
-                                    _showBlockedUsersDialog();
-                                  }
-                                },
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Kaldır',
-                                  style: TextStyle(
-                                    color: AppColors.success,
-                                    fontSize: 14,
-                                  ),
-                                ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: blockedUsers.length,
+                      itemBuilder: (context, index) {
+                        final userId = blockedUsers[index];
+                        final userData = blockedUserData[userId]!;
+                        final userName = userData['name'];
+                        final photoUrl = userData['photo'];
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.grey200,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-  // KULLANICI ENGELLE
-Future<void> blockUser(String userId) async {
-  try {
-    final user = _auth.currentUser;
-    if (user != null && user.uid != userId) {
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'blockedUsers': FieldValue.arrayUnion([userId]),
-      });
-      
-      // Karşılıklı eşleşmeyi kaldır
-      await _firestore
-          .collection('matches')
-          .where('user1Id', isEqualTo: user.uid)
-          .where('user2Id', isEqualTo: userId)
-          .get()
-          .then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.update({'isActive': false});
-        }
-      });
-      
-      await _firestore
-          .collection('matches')
-          .where('user1Id', isEqualTo: userId)
-          .where('user2Id', isEqualTo: user.uid)
-          .get()
-          .then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.update({'isActive': false});
-        }
-      });
-      
-      setState(() {
-        blockedUsers.add(userId);
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kullanıcı engellendi'),
-          backgroundColor: AppColors.success,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                // Profil resmi
+                                CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor:
+                                      AppColors.error.withOpacity(0.1),
+                                  backgroundImage: photoUrl != null
+                                      ? NetworkImage(photoUrl)
+                                      : null,
+                                  child: photoUrl == null
+                                      ? const Icon(
+                                          Icons.person_off,
+                                          color: AppColors.error,
+                                        )
+                                      : null,
+                                ),
+
+                                const SizedBox(width: 12),
+
+                                // İsim - Flexible ile sarmalayarak taşmayı önle
+                                Expanded(
+                                  child: Text(
+                                    userName,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+
+                                const SizedBox(width: 8),
+
+                                // Engeli kaldır butonu
+                                TextButton(
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Engeli Kaldır'),
+                                        content: Text(
+                                          '$userName kullanıcısının engelini '
+                                          'kaldırmak istediğinize emin misiniz?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: const Text('İptal'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  AppColors.success,
+                                            ),
+                                            child: const Text('Kaldır'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirm == true) {
+                                      Navigator.pop(context);
+                                      await _unblockUser(userId);
+                                      _showBlockedUsersDialog();
+                                    }
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Kaldır',
+                                    style: TextStyle(
+                                      color: AppColors.success,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Kullanıcı engellenemedi. Lütfen tekrar deneyiniz.'),
-        backgroundColor: AppColors.error,
       ),
     );
   }
-}
-  
+
+  // KULLANICI ENGELLE
+  Future<void> blockUser(String userId) async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null && user.uid != userId) {
+        await _firestore.collection('users').doc(user.uid).update({
+          'blockedUsers': FieldValue.arrayUnion([userId]),
+        });
+
+        // Karşılıklı eşleşmeyi kaldır
+        await _firestore
+            .collection('matches')
+            .where('user1Id', isEqualTo: user.uid)
+            .where('user2Id', isEqualTo: userId)
+            .get()
+            .then((snapshot) {
+          for (var doc in snapshot.docs) {
+            doc.reference.update({'isActive': false});
+          }
+        });
+
+        await _firestore
+            .collection('matches')
+            .where('user1Id', isEqualTo: userId)
+            .where('user2Id', isEqualTo: user.uid)
+            .get()
+            .then((snapshot) {
+          for (var doc in snapshot.docs) {
+            doc.reference.update({'isActive': false});
+          }
+        });
+
+        setState(() {
+          blockedUsers.add(userId);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kullanıcı engellendi'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kullanıcı engellenemedi. Lütfen tekrar deneyiniz.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   // ENGEL KALDIR
   Future<void> _unblockUser(String userId) async {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .update({
+        await _firestore.collection('users').doc(user.uid).update({
           'blockedUsers': FieldValue.arrayRemove([userId]),
         });
-        
+
         setState(() {
           blockedUsers.remove(userId);
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Engel kaldırıldı'),
@@ -1119,28 +1175,25 @@ Future<void> blockUser(String userId) async {
       );
     }
   }
-  
+
   // HESABI DONDUR
   Future<void> _freezeAccount() async {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .update({
+        await _firestore.collection('users').doc(user.uid).update({
           'isActive': false,
           'profileActive': false,
           'frozenAt': FieldValue.serverTimestamp(),
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Hesabınız donduruldu'),
             backgroundColor: AppColors.warning,
           ),
         );
-        
+
         // Çıkış yap
         await _auth.signOut();
         Navigator.pushAndRemoveUntil(
@@ -1152,13 +1205,14 @@ Future<void> blockUser(String userId) async {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Hesap dondurma işlemi tamamlanamadı. Lütfen tekrar deneyiniz.'),
+          content: Text(
+              'Hesap dondurma işlemi tamamlanamadı. Lütfen tekrar deneyiniz.'),
           backgroundColor: AppColors.error,
         ),
       );
     }
   }
-  
+
   // HESABI SİL
   Future<void> _deleteAccount() async {
     try {
@@ -1169,114 +1223,114 @@ Future<void> blockUser(String userId) async {
           if (user == null) return;
 
           final uid = user.uid;
-          
+
           // 1. Firestore'dan kullanıcı verilerini sil
           final batch = _firestore.batch();
-          
+
           // Kullanıcı dokümanını sil
           batch.delete(_firestore.collection('users').doc(uid));
-          
+
           // Matches koleksiyonundan kullanıcıyı sil
           final matchesQuery = await _firestore
               .collection('matches')
               .where('users', arrayContains: uid)
               .get();
-          
+
           for (var doc in matchesQuery.docs) {
             batch.delete(doc.reference);
           }
-          
+
           // Messages koleksiyonundan mesajları sil
           final messagesQuery = await _firestore
               .collection('messages')
               .where('participants', arrayContains: uid)
               .get();
-          
+
           for (var doc in messagesQuery.docs) {
             batch.delete(doc.reference);
           }
-          
+
           // Likes koleksiyonundan beğenileri sil
           final likesQuery1 = await _firestore
               .collection('likes')
               .where('from', isEqualTo: uid)
               .get();
-          
+
           final likesQuery2 = await _firestore
               .collection('likes')
               .where('to', isEqualTo: uid)
               .get();
-          
+
           for (var doc in likesQuery1.docs) {
             batch.delete(doc.reference);
           }
-          
+
           for (var doc in likesQuery2.docs) {
             batch.delete(doc.reference);
           }
-          
+
           // Blocked users koleksiyonundan kayıtları sil
           final blockedQuery1 = await _firestore
               .collection('blocked_users')
               .where('blocker', isEqualTo: uid)
               .get();
-          
+
           final blockedQuery2 = await _firestore
               .collection('blocked_users')
               .where('blocked', isEqualTo: uid)
               .get();
-          
+
           for (var doc in blockedQuery1.docs) {
             batch.delete(doc.reference);
           }
-          
+
           for (var doc in blockedQuery2.docs) {
             batch.delete(doc.reference);
           }
-          
+
           // Reports koleksiyonundan raporları sil
           final reportsQuery1 = await _firestore
               .collection('reports')
               .where('reporter', isEqualTo: uid)
               .get();
-          
+
           final reportsQuery2 = await _firestore
               .collection('reports')
               .where('reported', isEqualTo: uid)
               .get();
-          
+
           for (var doc in reportsQuery1.docs) {
             batch.delete(doc.reference);
           }
-          
+
           for (var doc in reportsQuery2.docs) {
             batch.delete(doc.reference);
           }
-          
+
           // Firestore batch işlemini gerçekleştir
           await batch.commit();
-          
+
           // 2. Firebase Storage'dan fotoğrafları sil
           try {
             final storageRef = FirebaseStorage.instance.ref('user_photos/$uid');
             final listResult = await storageRef.listAll();
-            
+
             for (var item in listResult.items) {
               await item.delete();
             }
           } catch (storageError) {
             // Storage silme hatası - devam et
           }
-          
+
           // 3. Auto login verilerini temizle
           final autoLoginService = AutoLoginService();
           await autoLoginService.clearAutoLoginData();
-          
+
           // 4. Auth hesabını sil
           await user.delete();
         },
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1284,7 +1338,7 @@ Future<void> blockUser(String userId) async {
             backgroundColor: AppColors.success,
           ),
         );
-        
+
         // Login sayfasına yönlendir
         Navigator.pushAndRemoveUntil(
           context,
@@ -1300,7 +1354,8 @@ Future<void> blockUser(String userId) async {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Hesap silme işlemi tamamlanamadı: ${e.toString()}'),
+              content:
+                  Text('Hesap silme işlemi tamamlanamadı: ${e.toString()}'),
               backgroundColor: AppColors.error,
               duration: const Duration(seconds: 4),
             ),
@@ -1309,11 +1364,11 @@ Future<void> blockUser(String userId) async {
       }
     }
   }
-  
+
   // YENİDEN KİMLİK DOĞRULAMA
   void _showReauthenticateDialog({required Function onSuccess}) {
     final TextEditingController passwordController = TextEditingController();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1353,7 +1408,7 @@ Future<void> blockUser(String userId) async {
                 );
                 return;
               }
-              
+
               try {
                 final user = _auth.currentUser;
                 if (user != null && user.email != null) {
@@ -1362,7 +1417,7 @@ Future<void> blockUser(String userId) async {
                     password: passwordController.text,
                   );
                   await user.reauthenticateWithCredential(credential);
-                  
+
                   if (mounted) {
                     Navigator.pop(context);
                     onSuccess();
@@ -1375,8 +1430,8 @@ Future<void> blockUser(String userId) async {
                     SnackBar(
                       content: Text(
                         e.toString().contains('wrong-password')
-                          ? 'Hatalı şifre. Lütfen tekrar deneyiniz.'
-                          : 'Doğrulama başarısız. Şifrenizi kontrol ediniz.',
+                            ? 'Hatalı şifre. Lütfen tekrar deneyiniz.'
+                            : 'Doğrulama başarısız. Şifrenizi kontrol ediniz.',
                       ),
                       backgroundColor: AppColors.error,
                     ),
@@ -1394,7 +1449,7 @@ Future<void> blockUser(String userId) async {
       ),
     );
   }
-  
+
   // Cinsiyet tercihlerini metin olarak göster
   String _getGenderPreferencesText() {
     if (genderPreferences.isEmpty) {
@@ -1407,7 +1462,7 @@ Future<void> blockUser(String userId) async {
       return genderPreferences.first;
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -1418,12 +1473,13 @@ Future<void> blockUser(String userId) async {
         ),
       );
     }
-    
+
     return Scaffold(
       backgroundColor: AppColors.grey50,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: Text('Ayarlar', style: AppTextStyles.h4.copyWith(color: AppColors.white)),
+        title: Text('Ayarlar',
+            style: AppTextStyles.h4.copyWith(color: AppColors.white)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.white),
           onPressed: () => Navigator.pop(context),
@@ -1458,7 +1514,7 @@ Future<void> blockUser(String userId) async {
                   ],
                 ),
               ),
-            
+
             // EŞLEŞME TERCİHLERİ - YENİ!
             _buildSection(
               title: 'Eşleşme Tercihleri',
@@ -1467,9 +1523,11 @@ Future<void> blockUser(String userId) async {
               children: [
                 _buildListTile(
                   title: 'Cinsiyet Tercihleri',
-                  subtitle: 'Kimleri görmek istiyorsun: ${_getGenderPreferencesText()}',
+                  subtitle:
+                      'Kimleri görmek istiyorsun: ${_getGenderPreferencesText()}',
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -1487,7 +1545,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ],
             ),
-            
+
             // Görünürlük Ayarları
             _buildSection(
               title: 'Görünürlük Ayarları',
@@ -1517,7 +1575,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ],
             ),
-            
+
             // Bildirim Ayarları
             _buildSection(
               title: 'Bildirimler',
@@ -1564,7 +1622,7 @@ Future<void> blockUser(String userId) async {
                 ],
               ],
             ),
-            
+
             // Hesap Ayarları
             _buildSection(
               title: 'Hesap',
@@ -1584,7 +1642,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ],
             ),
-            
+
             // Gizlilik
             _buildSection(
               title: 'Gizlilik',
@@ -1598,7 +1656,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ],
             ),
-            
+
             // Destek
             _buildSection(
               title: 'Destek',
@@ -1637,7 +1695,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ],
             ),
-            
+
             // Premium
             if (!isPremium)
               _buildSection(
@@ -1645,7 +1703,8 @@ Future<void> blockUser(String userId) async {
                 icon: Icons.star,
                 children: [
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: AppColors.premiumGradient,
@@ -1679,7 +1738,7 @@ Future<void> blockUser(String userId) async {
                   ),
                 ],
               ),
-            
+
             // Tehlikeli Bölge
             _buildSection(
               title: 'Tehlikeli Bölge',
@@ -1703,49 +1762,50 @@ Future<void> blockUser(String userId) async {
                   },
                 ),
                 ListTile(
-  leading: const Icon(Icons.logout, color: Colors.red),
-  title: const Text(
-    'Çıkış Yap',
-    style: TextStyle(color: Colors.red),
-  ),
-  subtitle: const Text('Hesabından çıkış yap'),
-  onTap: () {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Çıkış Yap'),
-        content: const Text('Çıkış yapmak istediğinize emin misiniz?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          TextButton(
-            onPressed: () async {
-              // Auto-login verilerini temizle
-              final autoLoginService = AutoLoginService();
-              await autoLoginService.handleLogout();
-              
-              // Firebase'den çıkış yap
-              await FirebaseAuth.instance.signOut();
-              
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false,
-              );
-            },
-            child: const Text('Çıkış Yap', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  },
-),
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: const Text(
+                    'Çıkış Yap',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  subtitle: const Text('Hesabından çıkış yap'),
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Çıkış Yap'),
+                        content: const Text(
+                            'Çıkış yapmak istediğinize emin misiniz?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('İptal'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              // Auto-login verilerini temizle
+                              final autoLoginService = AutoLoginService();
+                              await autoLoginService.handleLogout();
+
+                              // Firebase'den çıkış yap
+                              await FirebaseAuth.instance.signOut();
+
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                    builder: (_) => const LoginPage()),
+                                (route) => false,
+                              );
+                            },
+                            child: const Text('Çıkış Yap',
+                                style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
 
-            
-            
             const SizedBox(height: 40),
           ],
         ),
@@ -1965,26 +2025,28 @@ Future<void> blockUser(String userId) async {
             listenable: _loadingManager,
             builder: (context, child) {
               return ElevatedButton(
-                onPressed: _loadingManager.isLoading(LoadingOperations.deleteAccount)
-                  ? null
-                  : () {
-                      Navigator.pop(context);
-                      _deleteAccount();
-                    },
+                onPressed:
+                    _loadingManager.isLoading(LoadingOperations.deleteAccount)
+                        ? null
+                        : () {
+                            Navigator.pop(context);
+                            _deleteAccount();
+                          },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,
                   foregroundColor: Colors.white,
                 ),
-                child: _loadingManager.isLoading(LoadingOperations.deleteAccount)
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Evet, Hesabımı Sil'),
+                child:
+                    _loadingManager.isLoading(LoadingOperations.deleteAccount)
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Evet, Hesabımı Sil'),
               );
             },
           ),
@@ -1994,7 +2056,7 @@ Future<void> blockUser(String userId) async {
   }
 
   // DESTEK METODLARI
-  
+
   void _showPrivacyPolicyDialog() {
     showModalBottomSheet(
       context: context,
@@ -2021,7 +2083,7 @@ Future<void> blockUser(String userId) async {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
+
             // Header
             Container(
               padding: const EdgeInsets.all(20),
@@ -2076,7 +2138,7 @@ Future<void> blockUser(String userId) async {
                 ],
               ),
             ),
-            
+
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -2091,7 +2153,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ),
             ),
-            
+
             // Footer
             Container(
               padding: const EdgeInsets.all(20),
@@ -2163,7 +2225,7 @@ Future<void> blockUser(String userId) async {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
+
             // Header
             Container(
               padding: const EdgeInsets.all(20),
@@ -2218,7 +2280,7 @@ Future<void> blockUser(String userId) async {
                 ],
               ),
             ),
-            
+
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -2233,7 +2295,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ),
             ),
-            
+
             // Footer
             Container(
               padding: const EdgeInsets.all(20),
@@ -2305,7 +2367,7 @@ Future<void> blockUser(String userId) async {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
+
             // Header
             Container(
               padding: const EdgeInsets.all(20),
@@ -2360,7 +2422,7 @@ Future<void> blockUser(String userId) async {
                 ],
               ),
             ),
-            
+
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -2377,7 +2439,7 @@ Future<void> blockUser(String userId) async {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Email Card
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -2399,9 +2461,9 @@ Future<void> blockUser(String userId) async {
                         subtitle: 'lovenmeapp@gmail.com',
                       ),
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Address Card
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -2420,12 +2482,13 @@ Future<void> blockUser(String userId) async {
                       child: _buildContactItem(
                         icon: Icons.location_on,
                         title: 'Adres',
-                        subtitle: 'Gazi Osman Paşa Mahallesi\n5499/1 Sokak No:9 Kat:1\nBornova / İzmir',
+                        subtitle:
+                            'Gazi Osman Paşa Mahallesi\n5499/1 Sokak No:9 Kat:1\nBornova / İzmir',
                       ),
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Info Banner
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -2466,7 +2529,7 @@ Future<void> blockUser(String userId) async {
                 ),
               ),
             ),
-            
+
             // Footer
             Container(
               padding: const EdgeInsets.all(20),
@@ -2558,127 +2621,128 @@ Future<void> blockUser(String userId) async {
 
   String _getPrivacyPolicyContent() {
     return '''
-Lovenme Gizlilik Politikası
-Güncelleme: 13/09/2025
+LOVENME GİZLİLİK POLİTİKASI
+Son Güncelleme Tarihi: 19.12.2025
 
-Bu gizlilik politikasının amacı, Lovenme tarafından işlenen kişisel verileriniz hakkında sizi şeffaf biçimde bilgilendirmektir. Lütfen dikkatle okuyunuz.
+Bu Gizlilik Politikası, Lovenme mobil uygulamasının ("Uygulama") kullanımı sırasında işlenen kişisel verilere ilişkin olarak kullanıcıları bilgilendirmek amacıyla hazırlanmıştır.
 
-Önemli not: Aşağıdaki metin, AB GDPR ve Türkiye KVKK (6698) ile uyum gözetilerek hazırlanmıştır. Üçüncü taraf servisler (ör. Apple/Google/ödeme altyapıları, harita/analitik/bildirim sağlayıcıları) için kendi gizlilik politikaları geçerlidir.
+Lovenme, kişisel verilerinizi yürürlükteki mevzuata uygun olarak; başta 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) olmak üzere ilgili düzenlemelere uygun şekilde işler.
 
-TANIMLAR
+1. Veri Sorumlusu
+Unvan: Noesis Social
+Yetkili: Burak Ohrili
+Adres: Gazi Osman Paşa Mah. 5499/1 Sokak No:9 D:2 Bornova / İzmir / Türkiye
+E-posta: support@lovenme.app
 
-Uygulama (Lovenme): iOS/Android mağazalarında Lovenme.
-Beğeni: Bir profili beğendiğinizi gösteren eylem.
-Süper Beğeni: Öne çıkan beğeni.
-Check-in: Bir mekâna girişinizi/ziyaretinizi uygulamada bildirmeniz.
-Muhtar: Belirli bir süre için mekânın "lideri" unvanı.
-Harita: Yakınınızdaki/sponsorlu mekânları keşfetmeyi sağlayan görünüm.
-Feed (Akış): Check-in paylaşımlarının göründüğü alan.
-Crush/Match (Eşleşme): İki profilin karşılıklı beğenmesi ile oluşan durum.
-Mesajlar: Eşleşme sonrası açılan özel sohbet.
-Favori Mekânlar: Kullanıcının yıldızladığı mekânlar.
-Hesap: Üyeye ait kişisel alan.
-Üye: Uygulamaya kayıtlı gerçek kişi.
-Veri Sorumlusu: BURAK OHRİLİ – Gazi Osman Paşa Mah. 5499/1 Sokak No:9 D:2 Bornova / İzmir.
-İrtibat: support@lovenme.app, KVKK için: kvkk@lovenme.app
+2. İşlenen Kişisel Veriler
+Uygulama kapsamında aşağıdaki kişisel veriler işlenmektedir:
 
-1. Bu Politikanın Kapsamı
-Bu politika, Lovenme tarafından sunulan tüm hizmetler için geçerlidir. Üçüncü taraf servislerine (haritalar, ödeme altyapıları, bildirim/analitik sağlayıcıları) ait veri işleme faaliyetleri kendi politikalarına tabidir.
+2.1. Kimlik ve İletişim Bilgileri
+• Görünen ad (profil adı)
+• E-posta adresi
+• Telefon numarası
 
-2. Topladığımız Veriler
+Bu veriler, kullanıcı hesabının oluşturulması, doğrulanması ve güvenliğinin sağlanması amacıyla işlenir.
 
-2.1 Zorunlu Veriler
-- Tanımlama verileri: Ad, yaş, cinsiyet, en az 1 yüz fotoğrafı
-- İletişim: E-posta ve/veya telefon numarası
-- Hesap/etkileşim verileri: Kayıt/oturum tarihleri, beğeni/eşleşme/mesaj kayıtları
-- Cihaz/teknik veriler: Uygulama sürümü, işletim sistemi, IP, hata kayıtları
-- Konum: Konum izni ile coğrafi konum
+2.2. Kullanıcı İçerikleri
+• Profil fotoğrafları
+• Mesajlaşma (DM) içerikleri
+• Check-in paylaşımları ve açıklamaları
 
-2.2 Hizmet Fonksiyonları İçin Gerekli Veriler
-- Check-in ve karşılaşma noktaları
-- Harita görünümü ve sıralamalar
-- Arama tercihleri: Yaş aralığı, cinsiyet filtreleri
-- Mesaj içerikleri meta verileri
-- Satın alma/abonelik kayıtları
+Mesaj içerikleri yalnızca hizmetin sunulması amacıyla saklanır ve üçüncü kişilerle paylaşılmaz.
 
-2.3 İsteğe Bağlı Veriler
-- Favori mekânlar ve hobiler
+2.3. Konum Bilgisi
+• Kesin konum bilgisi (precise location)
 
-3. Verileri Nasıl Topluyoruz?
-- Doğrudan sizden: Kayıt, profil düzenleme, tercih yönetimi
-- Otomatik: Uygulama kullanımı, cihaz/teknik veriler, konum
-- Üçüncü taraflardan: Apple/Google kimlik doğrulama, harita/analitik sağlayıcıları
+Konum bilgisi yalnızca:
+• Yakındaki mekânları göstermek,
+• Check-in yapılmasını sağlamak,
+• Son 24 saatlik check-in'leri görüntülemek
 
-4. İşleme Amaçları ve Hukuki Dayanaklar
+amaçlarıyla, kullanıcının açık izniyle işlenir.
+Uygulama, arka planda sürekli konum takibi yapmaz.
 
-4.1 Sözleşmenin ifası
-- Hesap açma/kapama, profil oluşturma
-- Temel hizmetlerin sunulması (beğeni, eşleşme, mesaj, check-in)
-- Abonelik/ücretli özelliklerin işletimi
+2.4. Kullanım ve Teknik Veriler
+• Kullanıcı kimliği (User ID)
+• Uygulama içi etkileşimler (eşleşme, mesajlaşma, check-in)
+• Hata ve çökme kayıtları (varsa)
 
-4.2 Rıza
-- Konum verisiyle yakınınızdaki profillerin önerilmesi
-- Profil doğrulama için biyometri
-- Uygulama içi kişiselleştirilmiş reklam
+Bu veriler, uygulamanın güvenli ve düzgün çalışmasını sağlamak amacıyla kullanılır.
 
-4.3 Meşru menfaat
-- Profil önerileri
-- Sponsorlu mekân önerileri
-- Kötüye kullanım/sahtecilik tespiti
-- Hizmeti geliştirmek için analiz
+2.5. Satın Alma Bilgileri
+• Abonelik ve satın alma durumu
 
-4.4 Yasal yükümlülük
-- Adli/idarî mercilerden gelen taleplere yanıt
-- KVKK ve GDPR kapsamındaki hak başvurularının yönetimi
+Ödeme kartı veya banka bilgileri Lovenme tarafından toplanmaz veya saklanmaz. Tüm ödeme işlemleri ilgili uygulama mağazaları (Apple App Store vb.) üzerinden gerçekleştirilir.
 
-5. Reklam, Pazarlama ve Bildirimler
-- Bülten ve uygulama içi öneriler
-- Uygulama içi reklam (onay ile)
-- Push bildirimler (tercihlerden yönetilebilir)
+3. Kişisel Verilerin Toplanma Yöntemi
+Kişisel veriler;
+• Kullanıcı tarafından doğrudan sağlanan bilgiler,
+• Uygulama kullanımı sırasında otomatik olarak oluşan veriler,
+• Kimlik doğrulama ve bildirim hizmetleri aracılığıyla
+toplanmaktadır.
 
-6. Güvenlik, Sahtecilik ve Tacizle Mücadele
-- Otomatik ve manuel denetimler
-- Profil doğrulama (opsiyonel)
-- Askıya alma/engelleme/silme
+4. Kişisel Verilerin İşlenme Amaçları
+Kişisel veriler aşağıdaki amaçlarla işlenmektedir:
+• Kullanıcı hesabının oluşturulması ve yönetilmesi
+• Mesajlaşma, eşleşme ve check-in hizmetlerinin sunulması
+• Yakındaki mekânların ve kullanıcıların gösterilmesi
+• Güvenlik, sahtecilik ve kötüye kullanımın önlenmesi
+• Uygulamanın teknik olarak sorunsuz çalışmasının sağlanması
+• Yasal yükümlülüklerin yerine getirilmesi
 
-7. Verilerin Paylaşımı
-- Yetkili Lovenme personeli
-- Hizmet sağlayıcılar/iş ortakları
-- Resmî makamlar/mahkemeler (yasal talepler)
-- Şirket işlemleri (birleşme/devralma)
+5. Üçüncü Taraf Hizmet Sağlayıcılar
+Uygulama kapsamında aşağıdaki hizmet sağlayıcılardan yararlanılmaktadır:
+• Google Firebase (Authentication, Firestore, Cloud Messaging)
+• NETGSM Telekomünikasyon A.Ş. (SMS doğrulama hizmetleri)
 
-8. Yurt Dışına Aktarım
-Veriler, Türkiye, AB/AEA veya güvenli üçüncü ülkelerde saklanıp işlenebilir. AB dışına aktarımlarda gerekli koruma araçları uygulanır.
+Bu hizmet sağlayıcılar, kişisel verileri yalnızca ilgili hizmeti sunmak amacıyla ve gizlilik yükümlülükleri çerçevesinde işler.
 
-9. Saklama Süreleri
-- Hesap süresi + 24 ay pasiflikte hesap silinir
-- Silinen/banlanan hesap verileri 24 ay aktif, ardından 12 ay arşivde
-- Konum ve karşılaşma noktaları: Son konum 1 ay, karşılaşma 6 ay
+6. Reklam, Pazarlama ve Takip
+Lovenme uygulamasında:
+• Üçüncü taraf reklam hizmetleri,
+• Kişiselleştirilmiş reklam,
+• Pazarlama veya yeniden hedefleme,
+• Uygulamalar arası kullanıcı takibi
+bulunmamaktadır.
 
-10. Haklarınız (KVKK & GDPR)
-- Erişim / Bilgi talebi
-- Düzeltme / Güncelleme
-- Silme ("unutulma")
-- İşlemenin kısıtlanması
-- İtiraz
-- Veri taşınabilirliği
-- Açık rızanın geri çekilmesi
+Kişisel veriler, reklam veya pazarlama amacıyla kullanılmaz ve paylaşılmaz.
 
-Başvuru: support@lovenme.app, KVKK/GDPR için: kvkk@lovenme.app
+7. Kişisel Verilerin Saklama Süresi
+Kişisel veriler:
+• Kullanıcı hesabı aktif olduğu sürece,
+• Hesap silme talebi sonrasında ise yasal yükümlülükler saklı kalmak kaydıyla
+makul süre boyunca saklanır ve ardından silinir veya anonim hale getirilir.
 
-11. Reşit Olmayanlar
-Lovenme 18 yaş altı kişilere yönelik değildir. Bu durumu tespit edersek hesap kapatılır.
+8. Kullanıcı Hakları
+KVKK ve GDPR kapsamında kullanıcılar:
+• Kişisel verilerine erişme,
+• Düzeltme talep etme,
+• Silme veya yok edilmesini isteme,
+• Veri işlemeye itiraz etme,
+• Açık rızayı geri çekme
+haklarına sahiptir.
 
-12. Güvenlik
-Endüstri standardı teknik ve idari önlemler (şifreleme, erişim kontrolleri) uygularız.
+Bu haklara ilişkin talepler support@lovenme.app adresi üzerinden iletilebilir.
 
-13. Politika Değişiklikleri
-Bu politika güncellenebilir. Önemli değişiklikleri uygulama içi bildirim ve/veya e-posta ile duyururuz.
+9. Hesap Silme
+Kullanıcılar, uygulama içindeki ilgili ayarlar aracılığıyla:
+• Hesaplarını geçici olarak dondurabilir,
+• Hesaplarını kalıcı olarak silebilir.
 
-14. İletişim
-Genel destek: support@lovenme.app
-KVKK/GDPR: kvkk@lovenme.app
-Posta: Veri Koruma İrtibatı – Lovenme, Gazi Osman Paşa Mah. 5499/1 Sokak No: 9 D:2 Bornova / İzmir / Türkiye
+Hesap silme işlemi sonrası kişisel veriler, yasal zorunluluklar dışında sistemlerden kaldırılır.
+
+10. Çocukların Gizliliği
+Lovenme, 18 yaşından küçük kullanıcılara yönelik değildir. Reşit olmayan kullanıcılara ait hesaplar tespit edilmesi halinde silinir.
+
+11. Güvenlik
+Lovenme, kişisel verilerin gizliliğini ve güvenliğini sağlamak amacıyla teknik ve idari güvenlik önlemleri uygular. Ancak internet üzerinden yapılan veri iletimlerinin %100 güvenli olduğu garanti edilemez.
+
+12. Politika Değişiklikleri
+Bu Gizlilik Politikası zaman zaman güncellenebilir. Önemli değişiklikler uygulama içinden veya uygun iletişim kanallarıyla kullanıcılara bildirilir.
+
+13. İletişim
+Gizlilik politikası ve kişisel verilerle ilgili her türlü soru ve talep için:
+📧 support@lovenme.app
 ''';
   }
 

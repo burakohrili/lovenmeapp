@@ -24,7 +24,7 @@ class UserProfile {
     this.name,
     this.surname,
     this.age,
-    this.gender, 
+    this.gender,
     this.bio,
     this.photos = const [],
     this.localPhotoPaths = const [],
@@ -42,7 +42,7 @@ class UserProfile {
     String? name,
     String? surname,
     int? age,
-    String? gender, 
+    String? gender,
     String? bio,
     List<String>? photos,
     List<String>? localPhotoPaths,
@@ -59,7 +59,7 @@ class UserProfile {
       name: name ?? this.name,
       surname: surname ?? this.surname,
       age: age ?? this.age,
-      gender: gender ?? this.gender, 
+      gender: gender ?? this.gender,
       bio: bio ?? this.bio,
       photos: photos ?? this.photos,
       localPhotoPaths: localPhotoPaths ?? this.localPhotoPaths,
@@ -98,7 +98,7 @@ UserProfile {
 
   double get completionProgress {
     double progress = 0.0;
-    
+
     if (name != null && name!.isNotEmpty) progress += 0.1;
     if (surname != null && surname!.isNotEmpty) progress += 0.1;
     if (age != null) progress += 0.1;
@@ -108,11 +108,12 @@ UserProfile {
     if (favoriteVenues.length >= 3) progress += 0.2;
     if (isEmailVerified) progress += 0.05;
     if (isPhoneVerified) progress += 0.05;
-    
+
     return progress;
   }
 
-  bool get isValidForStep1 => name != null && surname != null && age != null && gender != null;
+  bool get isValidForStep1 =>
+      name != null && surname != null && age != null && gender != null;
   bool get isValidForStep2 => localPhotoPaths.length >= 2;
 }
 
@@ -121,29 +122,30 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
   UserProfileNotifier() : super(UserProfile());
 
   // Favori mekanları Firebase'e kaydet ve otomatik check-in oluştur
-  Future<void> saveFavoriteVenuesWithCheckIn(List<Map<String, dynamic>> favoriteVenues) async {
+  Future<void> saveFavoriteVenuesWithCheckIn(
+      List<Map<String, dynamic>> favoriteVenues) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         return;
       }
-      
-      
+
       updateFavoriteVenueDetails(favoriteVenues);
-      updateFavoriteVenues(favoriteVenues.map((v) => v['place_id'] as String).toList());
-      
+      updateFavoriteVenues(
+          favoriteVenues.map((v) => v['place_id'] as String).toList());
+
       // 🔧 FIX: Firebase'ten değil, provider state'ten user bilgilerini al
       // Firebase'te henüz profil kaydedilmemiş olabilir, ama state'te var
-      final userName = '${state.name ?? 'İsimsiz'} ${(state.surname?.isNotEmpty == true) ? state.surname![0] : ''}.';
+      final userName =
+          '${state.name ?? 'İsimsiz'} ${(state.surname?.isNotEmpty == true) ? state.surname![0] : ''}.';
       final userPhoto = state.photos.isNotEmpty ? state.photos.first : null;
-      
-      
+
       int successCount = 0;
       int errorCount = 0;
-      
+
       for (int i = 0; i < favoriteVenues.length; i++) {
         var venue = favoriteVenues[i];
-        
+
         final venueData = {
           'userId': user.uid,
           'userName': userName,
@@ -159,12 +161,14 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
           'isAutoCheckIn': true,
           'totalCheckIns': 1,
         };
-        
+
         try {
           // 0️⃣ MEKAN KAYDI: venues koleksiyonuna mekan bilgilerini ekle (eğer yoksa)
           // ⚡ SetOptions.merge kullanarak eğer yoksa oluştur, varsa güncelleme
           try {
-            final venueRef = FirebaseFirestore.instance.collection('venues').doc(venue['place_id']);
+            final venueRef = FirebaseFirestore.instance
+                .collection('venues')
+                .doc(venue['place_id']);
             await venueRef.set({
               'place_id': venue['place_id'],
               'name': venue['name'] ?? 'İsimsiz Mekan',
@@ -183,38 +187,39 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
           } catch (venueError) {
             // Mekan kaydı başarısız olsa bile check-in'ler oluşturulsun
           }
-          
+
           // 1️⃣ GÜNLÜK CHECK-IN: Harita için (resetlenecek)
           await FirebaseFirestore.instance.collection('check_ins').add({
             ...venueData,
-            'fromFavorite': false, // Normal check-in gibi davranacak (günlük reset)
+            'fromFavorite':
+                false, // Normal check-in gibi davranacak (günlük reset)
+            'isInitialRegistration':
+                true, // İlk kayıtta oluşturulan check-in (cooldown için önemsiz)
           });
-          
+
           // 2️⃣ KALICI CHECK-IN: Discover için (kalıcı kalacak)
-          await FirebaseFirestore.instance.collection('favorite_venue_history').add({
+          await FirebaseFirestore.instance
+              .collection('favorite_venue_history')
+              .add({
             ...venueData,
             'fromFavorite': true, // 🔍 Discover için kalıcı
-            'isPermanent': true,   // ♻️ Reset edilmeyecek
+            'isPermanent': true, // ♻️ Reset edilmeyecek
             'registrationDate': FieldValue.serverTimestamp(),
           });
-          
+
           successCount++;
-          
         } catch (venueError) {
           errorCount++;
         }
       }
-      
-      
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // Profil kaydederken limit değerlerini de ekle
   Future<Map<String, dynamic>> getCompleteUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Kullanıcı bulunamadı');
-    
+
     // Temel profil verileri
     final profileData = {
       'uid': user.uid,
@@ -233,18 +238,18 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
       'isPhoneVerified': state.isPhoneVerified,
       'createdAt': FieldValue.serverTimestamp(),
       'lastLogin': FieldValue.serverTimestamp(),
-      
+
       // Varsayılan ayarlar
       'mapVisibility': true,
       'profileActive': true,
       'isPremium': false,
-      
+
       // Günlük limitler - YENİ
       'dailyLikesRemaining': 5,
       'dailySuperLikesRemaining': 0,
       'lastLimitReset': FieldValue.serverTimestamp(),
     };
-    
+
     return profileData;
   }
 
@@ -270,8 +275,7 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
   // Step 2: Fotoğraflar
   void updateLocalPhotoPaths(List<String> paths) {
     state = state.copyWith(localPhotoPaths: paths);
-    for (int i = 0; i < paths.length; i++) {
-    }
+    for (int i = 0; i < paths.length; i++) {}
   }
 
   void updatePhotos(List<String> photos) {
@@ -306,8 +310,7 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
 
   void updateFavoriteVenueDetails(List<Map<String, dynamic>> venueDetails) {
     state = state.copyWith(favoriteVenueDetails: venueDetails);
-    for (var venue in venueDetails) {
-    }
+    for (var venue in venueDetails) {}
   }
 
   // Step 5: İletişim bilgileri
@@ -350,17 +353,15 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
   }
 
   void printAllInfo() {
-    
     if (state.favoriteVenueDetails.isNotEmpty) {
-      for (var venue in state.favoriteVenueDetails) {
-      }
+      for (var venue in state.favoriteVenueDetails) {}
     }
-    
   }
 }
 
 // Provider tanımı
-final userProfileProvider = StateNotifierProvider<UserProfileNotifier, UserProfile>((ref) {
+final userProfileProvider =
+    StateNotifierProvider<UserProfileNotifier, UserProfile>((ref) {
   return UserProfileNotifier();
 });
 

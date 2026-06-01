@@ -205,23 +205,23 @@ class PaymentConfig {
   }
 
   /// Test modunda mı?
-  static bool get isTestMode => true; // Production'da false yapın
+  static bool get isTestMode => false; // ✅ Production: false
 
   /// Desteklenen ödeme paketleri
   static const List<Map<String, dynamic>> diamondPackages = [
     {
       'diamonds': 10,
-      'price': 79.99,
+      'price': 74.99, // ✅ iap_service.dart ile senkronize
       'currency': 'TRY',
-      'packageId': '10_diamonds_79_99',
+      'packageId': '10_diamonds_74_99',
       'title': '10 Elmas',
       'description': 'Muhtar teklifleri için',
     },
     {
       'diamonds': 50,
-      'price': 299.99,
+      'price': 249.99, // ✅ iap_service.dart ile senkronize
       'currency': 'TRY',
-      'packageId': '50_diamonds_299_99',
+      'packageId': '50_diamonds_249_99',
       'title': '50 Elmas',
       'description': 'Büyük muhtar savaşları için',
     },

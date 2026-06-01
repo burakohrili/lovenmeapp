@@ -66,63 +66,62 @@ class _SuperChatPurchaseSheetState extends ConsumerState<SuperChatPurchaseSheet>
       _isLoading = true;
     });
 
-    try {
-      final iapService = IAPService();
-      await iapService.purchaseSuperChats(
-        productId,
-        onSuccess: () async {
-          // Başarı animasyonu
-          _sparkleController.forward();
-          
-          // Super chat sayısını güncelle
-          await _loadCurrentSuperChats();
-          
-          // Başarı mesajı
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.chat_bubble, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text('$quantity Super Chat satın alındı! 💬'),
-                  ],
-                ),
-                backgroundColor: AppColors.success,
-                duration: const Duration(seconds: 3),
+    final iapService = IAPService();
+    await iapService.purchaseSuperChats(
+      productId,
+      onSuccess: () async {
+        // Başarı animasyonu
+        _sparkleController.forward();
+
+        // Super chat sayısını güncelle
+        await _loadCurrentSuperChats();
+
+        if (mounted) {
+          setState(() => _isLoading = false);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.chat_bubble, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text('$quantity Super Chat satın alındı! 💬'),
+                ],
               ),
-            );
-            
-            widget.onPurchaseSuccess?.call();
-          }
-        },
-        onError: (error) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Satın alma başarısız: $error'),
-                backgroundColor: AppColors.error,
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+
+          widget.onPurchaseSuccess?.call();
+        }
+      },
+      onError: (error) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Satın alma başarısız: $error'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      },
+      onPendingTimeout: () {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Ödeme işlemi devam ediyor. Onaylandığında Super Chat\'ler hesabınıza eklenecek.',
               ),
-            );
-          }
-        },
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Satın alma hatası: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      },
+    );
   }
 
   @override
