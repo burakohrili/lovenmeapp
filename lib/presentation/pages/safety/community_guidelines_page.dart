@@ -46,8 +46,8 @@ class CommunityGuidelinesPage extends StatelessWidget {
               iconColor: Colors.red,
               title: 'LoveNMe Topluluğuna Hoş Geldiniz',
               content: 
-                'LoveNMe, gerçek insanların gerçek bağlantılar kurduğu güvenli bir '
-                'dating platformudur. Topluluğumuzun güvenli ve saygılı kalması için '
+                'LoveNMe, gerçek mekanlar etrafında yerel topluluk keşfi ve güvenli sosyal bağlantılar sağlayan venue-based community platformudur. '
+                'Topluluğumuzun güvenli ve saygılı kalması için '
                 'aşağıdaki kurallara uymak zorundasınız.',
             ),
             const SizedBox(height: 24),

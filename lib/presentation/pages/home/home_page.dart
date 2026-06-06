@@ -46,7 +46,7 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex ?? 2;
+    _currentIndex = widget.initialIndex ?? 1;
 
     _initializeDailyLimits();
 
@@ -950,7 +950,7 @@ class _HomePageState extends ConsumerState<HomePage>
           Icon(Icons.favorite_border, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
           const Text(
-            'Henüz kimseyle eşleşmedin.',
+            'Henüz kimseyle bağlantı kurmadın.',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,

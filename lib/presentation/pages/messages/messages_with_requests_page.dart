@@ -267,7 +267,7 @@ class _MessagesTabContent extends ConsumerWidget {
             ),
             SizedBox(height: 24),
             Text(
-              'Henüz kimseyle eşleşmedin.',
+              'Henüz kimseyle bağlantı kurmadın.',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,

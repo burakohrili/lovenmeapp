@@ -353,7 +353,7 @@ class MatchesPage extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           const Text(
-            'Henüz kimseyle eşleşmedin.',
+            'Henüz kimseyle bağlantı kurmadın.',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,

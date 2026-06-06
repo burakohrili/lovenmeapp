@@ -179,7 +179,7 @@ class IAPConfig {
     {
       'id': 'super_chats_10',
       'title': '10 Super Chat',
-      'description': 'Daha fazla eşleşme için ideal',
+      'description': 'Daha fazla bağlantı için ideal',
       'quantity': 10,
       'originalPrice': 264.99,
       'pricePerUnit': 26.49,

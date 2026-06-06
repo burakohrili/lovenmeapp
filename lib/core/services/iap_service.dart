@@ -150,7 +150,7 @@ class IAPService {
             '3 adet Super Chat hakkı',
             '20 karakterlik özel mesaj',
             'Anında dikkat çek',
-            'Match şansını artır'
+            'Bağlantı kurma şansını artır'
           ],
         },
         'super_chats_10': {
@@ -161,7 +161,7 @@ class IAPService {
           'features': [
             '10 adet Super Chat hakkı',
             '20 karakterlik özel mesaj',
-            'Daha fazla match fırsatı',
+            'Daha fazla bağlantı fırsatı',
             'En popüler paket'
           ],
         },

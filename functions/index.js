@@ -1457,13 +1457,19 @@ exports.getPlaceDetails = onRequest(
 
 // 🔔 BOT PERFORM CHECK-IN - Server-side check-in to avoid client-side Firestore rules
 exports.botPerformCheckIn = onRequest(
-  { 
+  {
     region: 'us-central1',
     invokeMode: 'HTTPS',
     cors: true,
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         const body = req.method === 'GET' ? req.query : req.body;
         const botId = body.botId;
@@ -1627,12 +1633,18 @@ exports.botPerformCheckIn = onRequest(
 exports.createBotAccount = onRequest(
   {
     region: "us-central1",
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         const data = req.body.data || req.body;
-        
+
         console.log("🤖 Bot hesabı oluşturuluyor...");
         
         // Gerekli alanları kontrol et
@@ -1789,9 +1801,15 @@ exports.createBotAccount = onRequest(
 exports.getBotList = onRequest(
   {
     region: "us-central1",
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         console.log("📋 Bot listesi istendi");
         
@@ -1848,9 +1866,15 @@ exports.getBotList = onRequest(
 exports.getBotStats = onRequest(
   {
     region: "us-central1",
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         console.log("📊 Bot istatistikleri istendi");
         
@@ -1903,9 +1927,15 @@ exports.getBotStats = onRequest(
 exports.deleteBot = onRequest(
   {
     region: "us-central1",
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         const data = req.body.data || req.body;
         const {botId} = data;
@@ -1955,9 +1985,15 @@ exports.deleteBot = onRequest(
 exports.botSendMessage = onRequest(
   {
     region: "us-central1",
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         const {botId, targetUserId, message, isSuperMessage} = req.body;
         
@@ -2089,9 +2125,15 @@ exports.botSendMessage = onRequest(
 exports.botSendMessageRequest = onRequest(
   {
     region: "us-central1",
+    secrets: ['BOT_ADMIN_SECRET'],
   },
   async (req, res) => {
     return cors(req, res, async () => {
+      const adminSecret = process.env.BOT_ADMIN_SECRET;
+      if (!adminSecret || req.headers['x-admin-secret'] !== adminSecret) {
+        res.status(403).json({ success: false, error: 'Forbidden' });
+        return;
+      }
       try {
         const {botId, targetUserId, message, isSuperMessage} = req.body;
         

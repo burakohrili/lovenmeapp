@@ -539,7 +539,7 @@ class _SuperChatPurchaseSheetState extends ConsumerState<SuperChatPurchaseSheet>
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Super Chat ile özel mesajınızla dikkat çekin ve daha fazla eşleşme elde edin!',
+                  'Super Chat ile özel mesajınızla dikkat çekin ve yeni insanlarla bağlantı kurun!',
                   style: TextStyle(
                     color: AppColors.grey600,
                     fontSize: 12,
