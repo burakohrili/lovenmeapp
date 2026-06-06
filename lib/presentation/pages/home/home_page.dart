@@ -1296,7 +1296,7 @@ class _FeedPostWidgetState extends State<FeedPostWidget>
                                   ],
                                 ),
                                 child: const Icon(
-                                  Icons.favorite,
+                                  Icons.place,
                                   color: Colors.red,
                                   size: 100,
                                 ),
@@ -1399,7 +1399,7 @@ class _FeedPostWidgetState extends State<FeedPostWidget>
                                   ],
                                 ),
                                 child: const Icon(
-                                  Icons.favorite,
+                                  Icons.place,
                                   color: Colors.red,
                                   size: 100,
                                 ),

@@ -513,7 +513,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                           ),
                           child: const Center(
                             child: Icon(
-                              Icons.favorite,
+                              Icons.place,
                               color: Colors.white,
                               size: 60,
                             ),
@@ -624,7 +624,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                           ),
                           child: const Center(
                             child: Icon(
-                              Icons.favorite,
+                              Icons.place,
                               color: Colors.white,
                               size: 60,
                             ),

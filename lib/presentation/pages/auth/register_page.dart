@@ -778,10 +778,10 @@ Sanal Ürünler: Uygulama içinde satılan Super Like, Elmas vb. dijital hak/ö�
 2.5. Kimlik/Doğrulama: Güvenlik amacıyla gerektiğinde ek doğrulama (ör. SMS doğrulama, fotoğraf/yüz doğrulama) talep edebiliriz; sağlamazsanız hesabınız askıya alınabilir.
 
 3. Hizmetin Kapsamı ve Özellikler
-3.1. Lovenme; mekân/check-in temelli keşif ve eşleştirme mantığıyla kullanıcıları bir araya getiren bir sosyal tanışma uygulamasıdır.
+3.1. Lovenme; mekân/check-in temelli keşif ve bağlantı mantığıyla kullanıcıları ortak mekanlarda buluşturan bir sosyal keşif uygulamasıdır.
 3.2. Bazı özellikler ücretsiz; bazıları Premium abonelik veya Sanal Ürün satın alımı ile sunulur.
 3.3. Konum: Çalışma, favori/ziyaret ettiğiniz check-in yaptığınız mekânlara göre öneriler üretilmesine dayanır. Uygulama, cihazınızın konum izinlerine dayalı yaklaşık/kesin konum verilerini yalnızca açık rızanızla işler.
-3.4. Mesajlaşma: Eşleşme/karşılıklı ilgi sonrasında iletişim kurulabilir. Mesaj ve ses notları, iletimi sağlamak ve güvenlik/şikâyet süreçleri için makul süreyle saklanabilir.
+3.4. Mesajlaşma: Karşılıklı bağlantı isteği kabul edildikten sonra iletişim kurulabilir. Mesaj ve ses notları, iletimi sağlamak ve güvenlik/şikâyet süreçleri için makul süreyle saklanabilir.
 
 4. Davranış Kuralları (Topluluk İlkeleri)
 4.1. Saygı ve Doğruluk: Profilinizde gerçek sizi yansıtan bir yüz fotoğrafı bulundurmalı; başkasını taklit etmemeli, sahte/AI üretimi aldatıcı görseller kullanmamalısınız.
@@ -878,7 +878,7 @@ Uygulama, arka planda sürekli konum takibi yapmaz.
 
 2.4. Kullanım ve Teknik Veriler
 • Kullanıcı kimliği (User ID)
-• Uygulama içi etkileşimler (eşleşme, mesajlaşma, check-in)
+• Uygulama içi etkileşimler (bağlantı isteği, mesajlaşma, check-in)
 • Hata ve çökme kayıtları (varsa)
 
 Bu veriler, uygulamanın güvenli ve düzgün çalışmasını sağlamak amacıyla kullanılır.
@@ -898,7 +898,7 @@ toplanmaktadır.
 4. Kişisel Verilerin İşlenme Amaçları
 Kişisel veriler aşağıdaki amaçlarla işlenmektedir:
 • Kullanıcı hesabının oluşturulması ve yönetilmesi
-• Mesajlaşma, eşleşme ve check-in hizmetlerinin sunulması
+• Mesajlaşma, mekan bağlantısı ve check-in hizmetlerinin sunulması
 • Yakındaki mekânların ve kullanıcıların gösterilmesi
 • Güvenlik, sahtecilik ve kötüye kullanımın önlenmesi
 • Uygulamanın teknik olarak sorunsuz çalışmasının sağlanması

@@ -64,8 +64,6 @@
 	<!-- LOCATION PERMISSIONS -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Bu uygulama yakınındaki mekanları göstermek için konumuna ihtiyaç duyar.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Bu uygulama yakınındaki mekanları göstermek için konumuna ihtiyaç duyar.</string>
 	
 	
 	

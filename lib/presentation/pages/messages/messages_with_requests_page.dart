@@ -462,7 +462,7 @@ class _MessagesTabContent extends ConsumerWidget {
                       border: Border.all(color: Colors.white, width: 2),
                     ),
                     child: const Icon(
-                      Icons.favorite,
+                      Icons.people,
                       color: Colors.white,
                       size: 16,
                     ),

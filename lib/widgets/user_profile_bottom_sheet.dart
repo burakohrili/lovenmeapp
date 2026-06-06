@@ -1130,13 +1130,13 @@ class _UserProfileBottomSheetState extends State<UserProfileBottomSheet>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.favorite,
+                          Icons.person_add,
                           color: AppColors.white,
                           size: 24,
                         ),
                         SizedBox(width: 8),
                         Text(
-                          'Beğendin!',
+                          'İstek Gönderildi!',
                           style: TextStyle(
                             color: AppColors.white,
                             fontSize: 18,

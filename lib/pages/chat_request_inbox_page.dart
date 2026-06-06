@@ -163,7 +163,7 @@ class _ChatRequestInboxPageState extends State<ChatRequestInboxPage>
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('✅ Eşleştiniz! Artık mesajlaşabilirsiniz'),
+            content: const Text('✅ Bağlantı kuruldu! Artık mesajlaşabilirsiniz'),
             backgroundColor: AppColors.success,
             action: SnackBarAction(
               label: 'MESAJLAR',

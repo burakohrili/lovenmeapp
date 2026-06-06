@@ -374,8 +374,8 @@ class NotificationService {
   }) async {
     await NotificationService().sendNotificationToUser(
       targetUserId: toUserId,
-      title: '🎉 Yeni Eşleşme!',
-      body: '$fromUserName ile eşleştiniz! Hemen mesajlaşmaya başlayın.',
+      title: '📍 Yeni Mekan Bağlantısı!',
+      body: '$fromUserName ile ortak mekan bağlantısı kurdunuz! Hemen tanışın.',
       type: 'match',
       senderName: fromUserName,
       showSenderName: true,

@@ -140,7 +140,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               
               switch (type) {
                 case 'like':
-                  icon = Icons.favorite;
+                  icon = Icons.place;
                   iconColor = AppColors.like;
                   break;
                 case 'super_like':

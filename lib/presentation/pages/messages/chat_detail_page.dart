@@ -548,7 +548,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               child: Row(
                 children: [
                   const Icon(
-                    Icons.favorite,
+                    Icons.place,
                     size: 16,
                     color: AppColors.primary,
                   ),
@@ -954,7 +954,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            '${widget.match.name} ile eşleştiniz!',
+            '${widget.match.name} ile bağlantı kurdunuz!',
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,

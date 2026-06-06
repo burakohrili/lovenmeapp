@@ -132,7 +132,7 @@ class VideoSplashScreenState extends State<VideoSplashScreen> {
                   children: [
                     // Fallback logo/animation
                     Icon(
-                      Icons.favorite,
+                      Icons.place,
                       color: Colors.pink[300],
                       size: 80,
                     ),

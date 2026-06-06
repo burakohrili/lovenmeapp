@@ -423,7 +423,7 @@ class _MapPageState extends ConsumerState<MapPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isSuper ? Icons.star : Icons.favorite,
+                  isSuper ? Icons.star : Icons.place,
                   color: Colors.white,
                   size: 24,
                 ),
