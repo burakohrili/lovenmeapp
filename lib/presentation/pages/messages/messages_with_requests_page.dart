@@ -305,7 +305,7 @@ class _MessagesTabContent extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Yeni Eşleşmeler',
+                    'Mekan Bağlantıların',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -396,7 +396,7 @@ class _MessagesTabContent extends ConsumerWidget {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      'Eşleşmelerinle sohbete başla!',
+                      'Bağlantılarınla sohbete başla!',
                       style: TextStyle(
                         fontSize: 14,
                         color: AppColors.grey400,

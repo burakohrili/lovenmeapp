@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import '../pages/messages/models/match_model.dart';
 import '../pages/messages/chat_detail_page.dart';
+import '../../core/theme/app_colors.dart';
 
 class MatchAnimationDialog extends StatefulWidget {
   final MatchModel match;
@@ -115,35 +116,33 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                   children: [
                     // Başlık
                     const Text(
-                      "🎉 IT'S A MATCH! 🎉",
+                      "📍 Ortak Mekanınız Var!",
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFFA4458),
+                        color: AppColors.superLike,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    
+
                     const SizedBox(height: 20),
-                    
-                    // Chat wink animasyonu
+
+                    // Mekan ikonu
                     Container(
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(60),
                         gradient: const LinearGradient(
-                          colors: [Color(0xFFFA4458), Color(0xFFFF6B7A)],
+                          colors: [AppColors.superLike, AppColors.info],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                       ),
-                      child: Lottie.asset(
-                        'assets/animations/chat_wink.json',
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.contain,
-                        repeat: true,
+                      child: const Icon(
+                        Icons.place,
+                        color: Colors.white,
+                        size: 60,
                       ),
                     ),
                     
@@ -159,7 +158,7 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                           height: 60,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFFA4458), width: 3),
+                            border: Border.all(color: AppColors.superLike, width: 3),
                             color: Colors.grey[300],
                           ),
                           child: const Icon(
@@ -171,15 +170,15 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                         
                         const SizedBox(width: 20),
                         
-                        // Kalp ikonu
+                        // Mekan ikonu
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFA4458),
+                            color: AppColors.superLike,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Icon(
-                            Icons.favorite,
+                            Icons.place,
                             color: Colors.white,
                             size: 20,
                           ),
@@ -193,7 +192,7 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                           height: 60,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFFA4458), width: 3),
+                            border: Border.all(color: AppColors.superLike, width: 3),
                             image: widget.match.profileImage.isNotEmpty
                                 ? DecorationImage(
                                     image: NetworkImage(widget.match.profileImage),
@@ -248,7 +247,7 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                           child: OutlinedButton(
                             onPressed: _keepSwiping,
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFFFA4458)),
+                              side: const BorderSide(color: AppColors.superLike),
                               padding: const EdgeInsets.symmetric(vertical: 15),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(25),
@@ -257,7 +256,7 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                             child: const Text(
                               "Keşfetmeye Devam",
                               style: TextStyle(
-                                color: Color(0xFFFA4458),
+                                color: AppColors.superLike,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -271,7 +270,7 @@ class _MatchAnimationDialogState extends State<MatchAnimationDialog>
                           child: ElevatedButton(
                             onPressed: _goToChat,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFA4458),
+                              backgroundColor: AppColors.superLike,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 15),
                               shape: RoundedRectangleBorder(

@@ -143,7 +143,7 @@ class IAPService {
         // Super Chats 💬 Chat Request System
         'super_chats_3': {
           'title': '3 Super Chat',
-          'description': 'Özel mesajla öne çık ve fark yarat',
+          'description': 'Tanışma isteğine kişisel not ekleyerek öne çık',
           'price': 89.99,
           'quantity': 3,
           'features': [

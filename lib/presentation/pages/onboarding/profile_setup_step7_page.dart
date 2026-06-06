@@ -201,15 +201,8 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         uploadProgress = 0.9;
       });
       
-      // Cinsiyet tercihlerini belirle
-      List<String> matchPreferences = [];
-      if (profile.gender == 'Erkek') {
-        matchPreferences = ['Kadın'];
-      } else if (profile.gender == 'Kadın') {
-        matchPreferences = ['Erkek'];
-      } else {
-        matchPreferences = ['Erkek', 'Kadın', 'Diğer'];
-      }
+      // Cinsiyet-nötr tercih (Apple 4.3 uyumu)
+      List<String> matchPreferences = ['Erkek', 'Kadın', 'Diğer'];
 
       // Kayıt tamamlandığında çağrılacak:
       final userProfile = ref.read(userProfileProvider);

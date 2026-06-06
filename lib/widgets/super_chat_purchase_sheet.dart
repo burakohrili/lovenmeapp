@@ -175,7 +175,7 @@ class _SuperChatPurchaseSheetState extends ConsumerState<SuperChatPurchaseSheet>
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Özel mesajla fark yarat',
+                      'Tanışma isteğine kişisel not ekle',
                       style: TextStyle(
                         color: AppColors.white,
                         fontSize: 14,
@@ -201,7 +201,7 @@ class _SuperChatPurchaseSheetState extends ConsumerState<SuperChatPurchaseSheet>
     final features = [
       {'icon': Icons.message, 'text': '20 karakterlik özel mesaj'},
       {'icon': Icons.flash_on, 'text': '5 hızlı mesaj seçeneği'},
-      {'icon': Icons.star, 'text': 'Anında ilgi çek'},
+      {'icon': Icons.star, 'text': 'Kalabalıkta öne çık'},
     ];
 
     return Column(
@@ -539,7 +539,7 @@ class _SuperChatPurchaseSheetState extends ConsumerState<SuperChatPurchaseSheet>
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Super Chat ile özel mesajınızla dikkat çekin ve yeni insanlarla bağlantı kurun!',
+                  'Super Chat ile tanışma isteğinize kişisel bir not ekleyin ve öne çıkın!',
                   style: TextStyle(
                     color: AppColors.grey600,
                     fontSize: 12,

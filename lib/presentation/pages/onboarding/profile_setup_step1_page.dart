@@ -161,19 +161,10 @@ class _ProfileSetupStep1PageState extends ConsumerState<ProfileSetupStep1Page> {
   }
 
   void _handleNext() {
-    // Cinsiyet kontrolü
-    if (_selectedGender == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lütfen cinsiyet seçiniz'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
+    // Cinsiyet opsiyonel (Apple 4.3 uyumu)
 
     if (_formKey.currentState!.validate()) {
-      // Provider'a bilgileri kaydet - CİNSİYET DAHİL
+      // Provider'a bilgileri kaydet - CİNSİYET OPSİYONEL
       ref.read(userProfileProvider.notifier).updateBasicInfo(
         name: _nameController.text,
         surname: _surnameController.text,

@@ -135,7 +135,7 @@ class MatchesPage extends ConsumerWidget {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text(
-                                    'Yeni Eşleşmeler',
+                                    'Mekan Bağlantıların',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -229,7 +229,7 @@ class MatchesPage extends ConsumerWidget {
                                     ),
                                     SizedBox(height: 8),
                                     Text(
-                                      'Eşleşmelerinle sohbete başla!',
+                                      'Bağlantılarınla sohbete başla!',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: AppColors.grey400,
@@ -346,7 +346,7 @@ class MatchesPage extends ConsumerWidget {
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.favorite_border,
+              Icons.place,
               size: 60,
               color: AppColors.primary,
             ),

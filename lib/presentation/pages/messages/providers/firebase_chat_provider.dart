@@ -8,6 +8,7 @@ import '../models/match_model.dart';
 import '../models/message_model.dart';
 import 'chat_provider.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/encounter_service.dart';
 
 class FirebaseChatNotifier extends StateNotifier<ChatState> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -149,12 +150,27 @@ class FirebaseChatNotifier extends StateNotifier<ChatState> {
             unreadCount: 0,
             isOnline: userData['isOnline'] ?? false,
             lastSeen: userData['lastSeen']?.toString(),
-            commonVenues: [],
             commonHobbies: [],
             isPremium: userData['isPremium'] ?? false,
           );
 
-          matches.add(match);
+          // Gerçek ortak check-in sayısını al
+          int commonCheckIns = 0;
+          List<String> commonVenueNames = [];
+          try {
+            final encounter = await EncounterService.getTopEncounter(currentUserId, otherUserId);
+            if (encounter != null) {
+              commonCheckIns = encounter.encounterCount;
+              commonVenueNames = [encounter.venueName];
+            }
+          } catch (_) {}
+
+          final matchWithVenues = match.copyWith(
+            commonCheckIns: commonCheckIns,
+            commonVenues: commonVenueNames,
+          );
+
+          matches.add(matchWithVenues);
 
           // Her match için mesajları dinle
           _listenToMessages(doc.id);

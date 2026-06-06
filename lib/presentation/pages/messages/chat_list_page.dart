@@ -62,7 +62,7 @@ class ChatListPage extends ConsumerWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'Eşleşmelerinle konuşmaya başla!',
+            'Bağlantılarınla konuşmaya başla!',
             style: TextStyle(
               fontSize: 14,
               color: AppColors.grey500,

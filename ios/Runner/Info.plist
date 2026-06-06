@@ -66,8 +66,8 @@
 	<string>Bu uygulama yakınındaki mekanları göstermek için konumuna ihtiyaç duyar.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Bu uygulama yakınındaki mekanları göstermek için konumuna ihtiyaç duyar.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Arka planda konum takibi için izin gerekiyor</string>
+	
+	
 	
 	<!-- iOS 14+ için hassas konum izni -->
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
@@ -84,7 +84,7 @@
 
 	<!-- CAMERA PERMISSIONS -->
 	<key>NSCameraUsageDescription</key>
-	<string>LoveNMe uses the camera to take profile photos and share check-in photos at venues. This feature is essential for the social dating experience and photo sharing functionality.</string>
+	<string>LoveNMe, profil fotoğrafı çekmek ve mekanlardaki check-in'lerde fotoğraf paylaşmak için kamerayı kullanır.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>LoveNMe needs access to your photo library to select existing photos for your profile. You can choose which photos to share from your gallery.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -98,6 +98,10 @@
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>
 	
+	<!-- App Category -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.social-networking</string>
+
 	<!-- iOS 17+ Privacy Manifests -->
 	<key>NSPrivacyTrackingDomains</key>
 	<array></array>

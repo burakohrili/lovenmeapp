@@ -115,7 +115,7 @@ class IAPConfig {
       'features': [
         'Sınırsız chat isteği',
         'Reklamsız deneyim',
-        'Günde 3 geri alma hakkı',
+        'Mekanda daha görünür ol',
         'Özel rozetler',
       ],
     },
@@ -132,7 +132,7 @@ class IAPConfig {
         'Sınırsız chat isteği',
         'Reklamsız deneyim',
         'Geçmiş check-in\'leri görüntüle',
-        'Günde 3 geri alma hakkı',
+        'Mekanda daha görünür ol',
         'Özel rozetler',
         'Öncelikli destek',
       ],
@@ -152,7 +152,7 @@ class IAPConfig {
         'Reklamsız deneyim',
         'Geçmiş check-in\'leri görüntüle',
         'Mekanda check-in yapanları gör',
-        'Günde 3 geri alma hakkı',
+        'Mekanda daha görünür ol',
         'Özel rozetler',
         'Öncelikli destek',
         '%33 indirim',
@@ -165,7 +165,7 @@ class IAPConfig {
     {
       'id': 'super_chats_3',
       'title': '3 Super Chat',
-      'description': 'Özel mesaj ile fark yarat',
+      'description': 'Tanışma isteğine kişisel not ekle',
       'quantity': 3,
       'originalPrice': 89.99,
       'pricePerUnit': 29.99,
@@ -173,7 +173,7 @@ class IAPConfig {
       'features': [
         '20 karakterlik özel mesaj',
         '5 hızlı mesaj seçeneği',
-        'Anında ilgi çek',
+        'Kalabalıkta öne çık',
       ],
     },
     {
@@ -187,7 +187,7 @@ class IAPConfig {
       'features': [
         '20 karakterlik özel mesaj',
         '5 hızlı mesaj seçeneği',
-        'Anında ilgi çek',
+        'Kalabalıkta öne çık',
         'En popüler paket',
       ],
     },
@@ -203,7 +203,7 @@ class IAPConfig {
       'features': [
         '20 karakterlik özel mesaj',
         '5 hızlı mesaj seçeneği',
-        'Anında ilgi çek',
+        'Kalabalıkta öne çık',
         '%20 indirim',
       ],
     },
