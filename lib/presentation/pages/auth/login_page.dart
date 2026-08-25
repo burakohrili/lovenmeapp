@@ -338,7 +338,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         // ),
                         // const SizedBox(height: 8),
                         // Text(
-                        //   'Mekanında Aşkını Bul',
+                        //   'Mekanında topluluğunu keşfet',
                         //   style: TextStyle(
                         //     fontSize: 16,
                         //     color: AppColors.white.withOpacity(0.8),

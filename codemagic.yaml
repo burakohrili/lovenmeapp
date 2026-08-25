@@ -1,0 +1,88 @@
+workflows:
+  ios-release:
+    name: iOS release IPA
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.lovenme.app
+      groups:
+        - lovenme_ios
+      vars:
+        APP_STORE_APPLE_ID: 6748146278
+    scripts:
+      - name: Write Firebase configs
+        script: |
+          echo "$FIREBASE_OPTIONS_DART_B64" | base64 --decode > lib/firebase_options.dart
+          echo "$IOS_GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Install CocoaPods dependencies
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Build signed iOS IPA
+        script: |
+          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") + 1))
+          flutter build ipa --release \
+            --build-name=1.1.0 \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
+
+  android-release:
+    name: Android release AAB
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      android_signing:
+        - lovenme_upload_key
+      groups:
+        - lovenme_android
+    scripts:
+      - name: Write Android Firebase config
+        script: |
+          echo "$FIREBASE_OPTIONS_DART_B64" | base64 --decode > lib/firebase_options.dart
+          echo "$ANDROID_GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build signed Android app bundle
+        script: flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab
+      - build/app/outputs/flutter-apk/app-release.apk
+
+  android-debug:
+    name: Android debug APK
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      groups:
+        - lovenme_android
+    scripts:
+      - name: Write Android Firebase config
+        script: |
+          echo "$FIREBASE_OPTIONS_DART_B64" | base64 --decode > lib/firebase_options.dart
+          echo "$ANDROID_GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build debug APK
+        script: flutter build apk --debug
+    artifacts:
+      - build/app/outputs/flutter-apk/app-debug.apk

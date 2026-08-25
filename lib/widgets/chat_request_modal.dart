@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/services/chat_request_service.dart';
 
-/// Chat Request Modal - Normal ve Super Chat için
+/// Connection request modal.
 class ChatRequestModal extends StatefulWidget {
   final String targetUserId;
   final String targetUserName;
@@ -94,7 +94,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
           SnackBar(
             content: Text(
               widget.isSuperChat
-                  ? '⭐ Süper mesaj gönderildi!'
+                  ? '⭐ Öne çıkan istek gönderildi!'
                   : '💬 Chat isteği gönderildi!',
             ),
             backgroundColor: AppColors.success,
@@ -187,7 +187,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
               const SizedBox(width: 8),
             ],
             Text(
-              widget.isSuperChat ? 'Süper Mesaj' : 'Mesaj Gönder',
+              widget.isSuperChat ? 'Öne Çıkan İstek' : 'Bağlantı İsteği',
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -249,7 +249,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
           ),
           const SizedBox(height: 12),
           Text(
-            '${widget.targetUserName} kullanıcısına mesaj göndermek istiyor musunuz?',
+            '${widget.targetUserName} kullanıcısına bağlantı isteği göndermek istiyor musunuz?',
             style: const TextStyle(
               fontSize: 14,
               color: AppColors.textSecondary,
@@ -258,7 +258,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
           ),
           const SizedBox(height: 8),
           const Text(
-            'Kabul ederse eşleşecek ve sohbet başlayacak.',
+            'Kabul ederse güvenli mesajlaşma başlayacak.',
             style: TextStyle(
               fontSize: 12,
               color: AppColors.textTertiary,
@@ -279,7 +279,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
           children: [
             Expanded(
               child: _buildModeButton(
-                'Hazır Mesajlar',
+                'Hazır Notlar',
                 Icons.message,
                 !_useCustomMessage,
                 () => setState(() => _useCustomMessage = false),
@@ -288,7 +288,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
             const SizedBox(width: 12),
             Expanded(
               child: _buildModeButton(
-                'Özel Mesaj',
+                'Kısa Not',
                 Icons.edit,
                 _useCustomMessage,
                 () => setState(() => _useCustomMessage = true),
@@ -367,7 +367,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Özel mesajını yaz',
+          'Kısa notunu yaz',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -404,7 +404,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
                 maxLength: 20,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Mesajını buraya yaz...',
+                  hintText: 'Notunu buraya yaz...',
                   hintStyle: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 15,
@@ -470,7 +470,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Hazır mesajlardan birini seç',
+          'Hazır notlardan birini seç',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -640,7 +640,7 @@ class _ChatRequestModalState extends State<ChatRequestModal>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          widget.isSuperChat ? 'Süper Mesaj Gönder' : 'Mesaj Gönder',
+                          widget.isSuperChat ? 'Öne Çıkan İstek Gönder' : 'İstek Gönder',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,

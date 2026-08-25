@@ -78,7 +78,7 @@ extension PremiumSubscriptionTypeExtension on PremiumSubscriptionType {
 
   List<String> get features {
     const baseFeatures = [
-      'Sınırsız chat isteği',
+      'Daha fazla bağlantı isteği',
       'Check-in yapanların profillerini gör',
       'Check-in yapmadan kişileri görebilme',
       'Geçmiş check-in\'leri görüntüle',
@@ -88,18 +88,18 @@ extension PremiumSubscriptionTypeExtension on PremiumSubscriptionType {
       case PremiumSubscriptionType.weekly:
         return [
           ...baseFeatures,
-          '3 Süper Chat hakkı (Tek seferlik)',
+          '3 öne çıkan istek hakkı (Tek seferlik)',
         ];
       case PremiumSubscriptionType.monthly:
         return [
           ...baseFeatures,
-          '10 Süper Chat hakkı (Tek seferlik)',
+          '10 öne çıkan istek hakkı (Tek seferlik)',
         //   'Öncelikli müşteri desteği',
         ];
       case PremiumSubscriptionType.quarterly:
         return [
           ...baseFeatures,
-          '30 Süper Chat hakkı (Tek seferlik)',
+          '30 öne çıkan istek hakkı (Tek seferlik)',
         //   'Öncelikli müşteri desteği',
         ];
     }

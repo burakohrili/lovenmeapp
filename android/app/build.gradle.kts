@@ -6,6 +6,10 @@ val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+val hasReleaseSigning = listOf("keyAlias", "keyPassword", "storeFile", "storePassword")
+    .all { keystoreProperties[it] is String && (keystoreProperties[it] as String).isNotBlank() }
+val hasCodemagicSigning = listOf("CM_KEYSTORE_PATH", "CM_KEYSTORE_PASSWORD", "CM_KEY_ALIAS", "CM_KEY_PASSWORD")
+    .all { !System.getenv(it).isNullOrBlank() }
 
 plugins {
     id("com.android.application")
@@ -16,15 +20,24 @@ plugins {
 
 android {
     namespace = "com.lovenme.app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+        if (hasCodemagicSigning || hasReleaseSigning) {
+            create("release") {
+                if (hasCodemagicSigning) {
+                    keyAlias = System.getenv("CM_KEY_ALIAS")
+                    keyPassword = System.getenv("CM_KEY_PASSWORD")
+                    storeFile = file(System.getenv("CM_KEYSTORE_PATH"))
+                    storePassword = System.getenv("CM_KEYSTORE_PASSWORD")
+                } else {
+                    keyAlias = keystoreProperties["keyAlias"] as String
+                    keyPassword = keystoreProperties["keyPassword"] as String
+                    storeFile = file(keystoreProperties["storeFile"] as String)
+                    storePassword = keystoreProperties["storePassword"] as String
+                }
+            }
         }
     }
 
@@ -54,7 +67,7 @@ android {
     defaultConfig {
         applicationId = "com.lovenme.app"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
@@ -62,7 +75,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasCodemagicSigning || hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             // ProGuard kapalı, marker problemi için
              isMinifyEnabled = true
             proguardFiles(
@@ -85,8 +100,8 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     
-    // ✅ Google Play Billing Library (for In-App Purchases) — v7.x Play Console zorunluluğu
-    implementation("com.android.billingclient:billing:7.1.1")
+    // Google Play Billing Library for in-app purchases.
+    implementation("com.android.billingclient:billing:8.0.0")
     
     // ✅ Google Play Services Base (for IAP support)
     implementation("com.google.android.gms:play-services-base:18.2.0")

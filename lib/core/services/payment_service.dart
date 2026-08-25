@@ -52,7 +52,7 @@ class PaymentService {
     PurchaseItem(
       id: 'premium_monthly',
       title: 'Premium Aylık',
-      description: 'Sınırsız chat + özel özellikler',
+      description: 'Yerel keşif ve görünürlük araçları',
       price: 49.99,
       currency: 'TRY',
       type: PurchaseType.premium,
@@ -96,12 +96,12 @@ class PaymentService {
     ),
   ];
 
-  // Super Chat paketleri - YENİ
+  // Öne çıkan istek paketleri
   List<PurchaseItem> get superChatPackages => [
     PurchaseItem(
       id: 'super_chats_3',
-      title: '3 Super Chat',
-      description: '3 super chat hakkı',
+      title: '3 Öne Çıkan İstek',
+      description: '3 öne çıkan istek hakkı',
       price: 89.99,
       currency: 'TRY',
       type: PurchaseType.superChats,
@@ -109,8 +109,8 @@ class PaymentService {
     ),
     PurchaseItem(
       id: 'super_chats_10',
-      title: '10 Super Chat',
-      description: '10 super chat hakkı',
+      title: '10 Öne Çıkan İstek',
+      description: '10 öne çıkan istek hakkı',
       price: 264.99,
       currency: 'TRY',
       type: PurchaseType.superChats,
@@ -118,8 +118,8 @@ class PaymentService {
     ),
     PurchaseItem(
       id: 'super_chats_25',
-      title: '25 Super Chat',
-      description: '25 super chat hakkı',
+      title: '25 Öne Çıkan İstek',
+      description: '25 öne çıkan istek hakkı',
       price: 599.99,
       currency: 'TRY',
       type: PurchaseType.superChats,

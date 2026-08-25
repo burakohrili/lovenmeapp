@@ -1,6 +1,6 @@
 {
-    "name": "mydateapp",
-    "short_name": "mydateapp",
+    "name": "Lovenme",
+    "short_name": "Lovenme",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -138,7 +138,7 @@ class VideoSplashScreenState extends State<VideoSplashScreen> {
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      'MyDateApp',
+                      'Lovenme',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 32,

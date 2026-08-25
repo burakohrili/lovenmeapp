@@ -15,10 +15,10 @@ class ChatRequestService {
   static List<String> getQuickMessages() {
     return [
       'Merhaba! 👋',
-      'Tanışalım mı? ✨',
-      'Kahve içelim? ☕',
-      'Sohbet edelim? 💬',
-      'Nasılsın? �',
+      'Aynı mekandayız ✨',
+      'Mekan önerin var mı? ☕',
+      'Bu yer nasıl? 💬',
+      'Selam! 👋',
     ];
   }
 
@@ -46,7 +46,7 @@ class ChatRequestService {
         return false;
       }
 
-      // 🛡️ MATCH KONTROLÜ: Zaten eşleşmiş miyiz?
+      // Aynı kullanıcıyla zaten aktif bağlantı var mı?
       final alreadyMatched = await areAlreadyMatched(toUserId);
       if (alreadyMatched) {
         return false;
@@ -185,7 +185,7 @@ class ChatRequestService {
       });
 
       
-      // Match oluşturulması Cloud Function tarafından yapılacak
+      // Bağlantı oluşturulması Cloud Function tarafından yapılacak
       // veya burada yapabiliriz
       await _createMatchFromRequest(requestData);
 
@@ -375,7 +375,7 @@ class ChatRequestService {
         return;
       }
 
-      // Match oluştur
+      // Bağlantı oluştur
       final matchRef = await _firestore.collection('matches').add({
         'user1Id': fromUserId,
         'user2Id': toUserId,

@@ -827,7 +827,7 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Sınırsız chat isteği, check-in yapanları gör ve daha fazlası!',
+                              'Daha fazla bağlantı isteği, check-in yapanları gör ve daha fazlası!',
                               style: TextStyle(
                                 color: AppColors.white.withOpacity(0.8),
                                 fontSize: 12,

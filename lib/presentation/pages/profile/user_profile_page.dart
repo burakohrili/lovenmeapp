@@ -2245,7 +2245,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _hasSentRequest ? 'Gönderildi' : 'Süper Mesaj',
+                      _hasSentRequest ? 'Gönderildi' : 'Öne Çıkan',
                       style: TextStyle(
                         color: _hasSentRequest ? Colors.grey[600] : Colors.white,
                         fontSize: 14,
@@ -2304,7 +2304,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                 ],
               ),
               content: const Text(
-                'Günlük chat isteği limitiniz doldu.\n\nPremium üyelik ile sınırsız chat isteği gönderebilirsiniz.',
+                'Günlük bağlantı isteği limitiniz doldu.\n\nPremium üyelik ile daha fazla bağlantı isteği gönderebilirsiniz.',
                 style: TextStyle(fontSize: 15),
               ),
               actions: [
@@ -2334,9 +2334,9 @@ class _UserProfilePageState extends State<UserProfilePage>
     }
   }
 
-  // Süper sohbet isteği gönder
+  // Öne çıkan bağlantı isteği gönder
   Future<void> _sendSuperChatRequest() async {
-    // 🛡️ Süper chat hakkı kontrolü
+    // 🛡️ Öne çıkan istek hakkı kontrolü
     final premiumStatus = await PremiumService.getPremiumStatus();
     
     if (premiumStatus.superChatsRemaining <= 0) {
@@ -2355,7 +2355,7 @@ class _UserProfilePageState extends State<UserProfilePage>
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  'Süper Chat Hakkınız Yok',
+                  'Öne Çıkan İstek Hakkınız Yok',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -2365,7 +2365,7 @@ class _UserProfilePageState extends State<UserProfilePage>
             ],
           ),
           content: const Text(
-            'Süper chat hakkınız kalmadı.\n\nPremium üyelik satın alarak süper chat hakkı kazanabilirsiniz.',
+            'Öne çıkan istek hakkınız kalmadı.\n\nPremium üyelik satın alarak öne çıkan istek hakkı kazanabilirsiniz.',
             style: TextStyle(fontSize: 15),
           ),
           actions: [

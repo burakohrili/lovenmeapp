@@ -59,6 +59,8 @@ firebase_options.dart
 *.keystore
 key.properties
 upload-keystore.jks
+upload_certificate.pem
+*-certificate.pem
 
 # Cloud Functions secrets
 functions/.env
@@ -97,3 +99,6 @@ functions/.env.*
 # Web admin panelleri (lokalde kalır, GitHub'a yüklenmez)
 web/admin/
 web/sponsor-admin-panel/
+
+# Local App Store / Play Store working assets
+store_assets/

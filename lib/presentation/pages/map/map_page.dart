@@ -431,7 +431,7 @@ class _MapPageState extends ConsumerState<MapPage>
                 Expanded(
                   child: Text(
                     isSuper
-                        ? '⭐ Süper Chat Gönderildi!'
+                        ? '⭐ Öne Çıkan İstek Gönderildi!'
                         : '� Chat İsteği Gönderildi!',
                     style: const TextStyle(
                       color: Colors.white,
@@ -4611,7 +4611,7 @@ class _MapPageState extends ConsumerState<MapPage>
     if (result == true) {
       // Show success message
       _showSuccessMessage(isSuper
-          ? '⭐ Süper sohbet isteği gönderildi!'
+          ? '⭐ Öne çıkan istek gönderildi!'
           : '💬 Sohbet isteği gönderildi!');
 
       // Track sent request locally

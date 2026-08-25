@@ -1043,7 +1043,7 @@ class _UserProfileBottomSheetState extends State<UserProfileBottomSheet>
                             color: _hasSentRequest ? AppColors.grey400 : AppColors.white,
                           ),
                           label: Text(
-                            _hasSentRequest ? 'İstek Gönderildi' : 'Süper Mesaj ⭐',
+                            _hasSentRequest ? 'İstek Gönderildi' : 'Öne Çıkan',
                             style: TextStyle(
                               color: _hasSentRequest ? AppColors.grey400 : AppColors.white,
                               fontWeight: FontWeight.bold,
@@ -1153,7 +1153,7 @@ class _UserProfileBottomSheetState extends State<UserProfileBottomSheet>
         ),
       ),
     
-    // Süper Beğeni Animasyonu
+    // Highlighted request animation
     if (_showSuperLikeAnimation && _superLikeAnimationController != null)
       Positioned(
         left: 0,
@@ -1192,7 +1192,7 @@ class _UserProfileBottomSheetState extends State<UserProfileBottomSheet>
                         ),
                         SizedBox(width: 12),
                         Text(
-                          'SÜPER!',
+                          'ÖNE ÇIKAN',
                           style: TextStyle(
                             color: AppColors.white,
                             fontSize: 28,

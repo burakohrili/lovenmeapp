@@ -490,7 +490,7 @@ class _ChatRequestCardState extends State<_ChatRequestCard> {
                       ),
                     ),
 
-                    // Super Chat Badge
+                    // Highlighted request badge
                     if (isSuperChat)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -512,7 +512,7 @@ class _ChatRequestCardState extends State<_ChatRequestCard> {
                             ),
                             SizedBox(width: 4),
                             Text(
-                              'SÜPER',
+                              'ÖNE ÇIKAN',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -528,7 +528,7 @@ class _ChatRequestCardState extends State<_ChatRequestCard> {
               ),
             ),
 
-            // Message (if super chat)
+            // Message attached to a highlighted request
             if (isSuperChat && widget.request.message != null)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -626,7 +626,7 @@ class _ChatRequestCardState extends State<_ChatRequestCard> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            isSuperChat ? 'Kabul Et ⭐' : 'Kabul Et ✓',
+                            isSuperChat ? 'Öne Çıkanı Kabul Et' : 'Kabul Et',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,

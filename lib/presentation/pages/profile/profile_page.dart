@@ -414,7 +414,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
         _refreshProfile();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Super Chat satın alındı! 💬'),
+            content: Text('🎉 Öne çıkan istek satın alındı!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -1419,7 +1419,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
                         const Icon(Icons.chat_bubble, color: Colors.white, size: 32),
                         const SizedBox(height: 8),
                         const Text(
-                          'Super Chat',
+                          'Öne Çıkan İstek',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,

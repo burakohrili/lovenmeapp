@@ -93,7 +93,7 @@ class _NotificationDebugPageState extends State<NotificationDebugPage> {
                 ),
                 ElevatedButton(
                   onPressed: _sendSuperLikeNotification,
-                  child: const Text('Süper Beğeni'),
+                  child: const Text('Öne Çıkan İstek'),
                 ),
                 ElevatedButton(
                   onPressed: _checkCloudFunctions,
@@ -179,7 +179,7 @@ class _NotificationDebugPageState extends State<NotificationDebugPage> {
       return;
     }
 
-    _addLog('⭐ Süper beğeni bildirimi gönderiliyor: $_targetUserId');
+    _addLog('⭐ Öne çıkan istek bildirimi gönderiliyor: $_targetUserId');
     try {
       await NotificationService.sendLikeNotification(
         toUserId: _targetUserId,
@@ -187,9 +187,9 @@ class _NotificationDebugPageState extends State<NotificationDebugPage> {
         isSuper: true,
         isPremium: true,
       );
-      _addLog('✅ Süper beğeni bildirimi gönderildi');
+      _addLog('✅ Öne çıkan istek bildirimi gönderildi');
     } catch (e) {
-      _addLog('❌ Süper beğeni bildirimi hatası: $e');
+      _addLog('❌ Öne çıkan istek bildirimi hatası: $e');
     }
   }
 

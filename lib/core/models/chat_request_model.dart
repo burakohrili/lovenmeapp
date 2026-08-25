@@ -194,7 +194,7 @@ class ChatRequestValidationResult {
   static ChatRequestValidationResult insufficientSuperChats() => 
       const ChatRequestValidationResult(
         canSend: false,
-        errorMessage: 'Super chat hakkınız bulunmuyor',
+        errorMessage: 'Öne çıkan istek hakkınız bulunmuyor',
         shouldShowPremiumInfo: true,
       );
 
@@ -207,7 +207,7 @@ class ChatRequestValidationResult {
   static ChatRequestValidationResult alreadyMatched() => 
       const ChatRequestValidationResult(
         canSend: false,
-        errorMessage: 'Bu kullanıcı ile zaten eşleşmişsiniz',
+        errorMessage: 'Bu kullanıcı ile zaten bağlantı kurmuşsunuz',
       );
 
   static ChatRequestValidationResult selfRequest() => 

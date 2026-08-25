@@ -46,7 +46,7 @@ class PaymentConfig {
     ],
     "merchantInfo": {
       "merchantId": "01234567890123456789",
-      "merchantName": "MyDateApp Test"
+      "merchantName": "Lovenme Test"
     },
     "transactionInfo": {
       "totalPriceStatus": "FINAL",
@@ -89,7 +89,7 @@ class PaymentConfig {
     ],
     "merchantInfo": {
       "merchantId": "01234567890123456789",
-      "merchantName": "MyDateApp Test"
+      "merchantName": "Lovenme Test"
     },
     "transactionInfo": {
       "totalPriceStatus": "FINAL",
@@ -139,7 +139,7 @@ class PaymentConfig {
     ],
     "merchantInfo": {
       "merchantId": "$merchantId",
-      "merchantName": "MyDateApp"
+      "merchantName": "Lovenme"
     },
     "transactionInfo": {
       "totalPriceStatus": "FINAL",
@@ -178,7 +178,7 @@ class PaymentConfig {
     ],
     "merchantInfo": {
       "merchantId": "GERÇEK_GOOGLE_PAY_MERCHANT_ID",
-      "merchantName": "MyDateApp"
+      "merchantName": "Lovenme"
     }
   }
 }

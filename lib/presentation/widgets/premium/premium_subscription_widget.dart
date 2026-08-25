@@ -470,7 +470,7 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${selectedPackage.type.superLikes} Super Like',
+                  '${selectedPackage.type.superLikes} Öne Çıkan İstek',
                   style: const TextStyle(
                     color: AppColors.premium,
                     fontWeight: FontWeight.bold,
@@ -565,7 +565,7 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
       features: [
         selectedPackage.subtitle,
         'Premium özellikler',
-        'Sınırsız chat isteği',
+        'Daha fazla bağlantı isteği',
         'Check-in yapanların profillerini gör',
         'Check-in yapmadan kişileri görebilme',
       ],

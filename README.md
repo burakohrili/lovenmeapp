@@ -1,32 +1,33 @@
-# 💕 LoveNMe - Modern Community App
+# Lovenme - Venue-Based Local Community Platform
 
-**LoveNMe** mekân temelli eşleşme mantığına dayalı, yenilikçi bir sosyal tanışma uygulamasıdır. Kullanıcılar favori mekanlarını paylaşarak ortak ilgi alanlarına sahip kişilerle eşleşir ve gerçek dünyada tanışır.
+Lovenme is a venue-based social discovery and local community platform. The product starts from real-world places: users discover nearby venues, check in, follow venue activity, and participate in a daily Venue Mayor system.
 
 ## 🚀 Ana Özellikler
 
-### 👤 Kullanıcı Profili
-- **7 Adımlık Profil Kurulumu**: Kişisel bilgiler, fotoğraflar, hobiler, favori mekanlar
-- **Akıllı Fotoğraf Sistemi**: Çoklu fotoğraf desteği ve otomatik sıkıştırma
-- **Detaylı Tercih Yönetimi**: Yaş aralığı, cinsiyet tercihleri, özel filtreler
+### Venue Discovery
+- Map-first local discovery with nearby cafes, restaurants, gyms, event spaces, and city spots
+- Venue detail pages with recent activity, community presence, and local context
+- Favorite venues and check-in history for personal local discovery
 
-### 🗺️ Mekân Tabanlı Eşleşme
-- **Google Maps Entegrasyonu**: Gerçek zamanlı mekan keşfi
-- **Favori Mekanlar**: 3-5 mekan seçimi ile kişiselleştirilmiş deneyim
-- **Check-in Sistemi**: Mekanlarda bulunma kayıtları
-- **Proximity Matching**: Yakınlık temelli akıllı eşleşme algoritması
+### Check-In System
+- Users check in to venues they actually visit
+- Venue activity is built around real-world presence
+- Check-in history powers better local recommendations and shared context
 
-### 💬 Mesajlaşma & Eşleşme
-- **Karşılıklı Beğeni Sistemi**: Like/Pass mekanizması
-- **Super Like**: Premium özellik ile öne çıkma
-- **Gerçek Zamanlı Mesajlaşma**: Firebase Cloud Messaging
-- **Ses Mesajları**: Flutter Sound entegrasyonu
+### Venue Mayor
+- Each venue can have a daily visible community leader
+- Users compete with Diamonds for venue-specific visibility
+- Mayor status is a location-based social game, not a generic messaging mechanic
 
-### 💎 Premium Özellikler
-- **3 Abonelik Paketi**: Haftalık (₺99.99), Aylık (₺299.99), 3 Aylık (₺499.99)
-- **Sınırsız Beğeni**: Free limitler kaldırılır
-- **Super Like Paketleri**: 3-30 arası super like hakkı
-- **Gelişmiş Filtreleme**: Detaylı arama seçenekleri
-- **Reklamsız Deneyim**: Kesintisiz kullanım
+### Controlled Communication
+- Users can send limited connection requests
+- Communication is opt-in and includes reporting, blocking, rate limits, and safety controls
+- Shared venue context is shown before conversation becomes the focus
+
+### Premium and Monetization
+- Premium unlocks richer local discovery tools, extended history, venue visibility, special badges, and priority support
+- Diamonds power Venue Mayor bids and venue visibility mechanics
+- Future business tools can support venue promotions, local campaigns, and venue analytics
 
 ## 🛠️ Teknoloji Yığını
 
@@ -88,7 +89,7 @@ flutter run
 ```
 lib/
 ├── core/                    # Temel modeller ve yardımcılar
-│   ├── models/             # Veri modelleri (User, Match, Premium)
+│   ├── models/             # Veri modelleri (User, Connection, Premium)
 │   └── theme/              # UI tema ayarları
 ├── presentation/           # UI katmanı
 │   ├── pages/             # Ana sayfalar
@@ -112,11 +113,11 @@ lib/
 6. **Telefon Doğrulama**: SMS ile telefon onayı
 7. **Final İnceleme**: Profil özeti ve onay
 
-### Eşleşme Algoritması
-- **Coğrafi Yakınlık**: 5-20km arası mesafe kontrolü
-- **Ortak Mekanlar**: Favori mekan benzerliği
-- **Yaş Uyumluluğu**: Tercih edilen yaş aralıkları
-- **Cinsiyet Filtreleri**: Kullanıcı tercihlerine göre
+### Local Context Engine
+- **Coğrafi Yakınlık**: Yakındaki mekanları ve topluluk hareketliliğini öne çıkarır
+- **Ortak Mekanlar**: Paylaşılan mekan deneyimlerini sosyal bağlam olarak kullanır
+- **Check-in Geçmişi**: Gerçek dünya aktivitelerine göre keşfi zenginleştirir
+- **Venue Community**: Mekan lideri, son aktiviteler ve topluluk yoğunluğunu gösterir
 
 ## 📈 Performans Optimizasyonları
 

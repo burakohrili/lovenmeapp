@@ -78,7 +78,7 @@ class PremiumService {
           'premiumType': type.name, // Premium tipini kaydet (weekly/monthly/quarterly)
           'premiumUntil': Timestamp.fromDate(subscriptionEndDate),
           'dailyRewindsRemaining': 3, // 🔄 Premium'da günde 3 geri alma
-          'dailyChatRequestsRemaining': 999, // 💬 Sınırsız chat
+          'dailyChatRequestsRemaining': 999, // Genişletilmiş bağlantı isteği
           'updatedAt': Timestamp.fromDate(now),
         });
       } else {
