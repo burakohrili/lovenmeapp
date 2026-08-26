@@ -21,6 +21,8 @@ workflows:
         script: |
           echo "$FIREBASE_OPTIONS_DART_B64" | base64 --decode > lib/firebase_options.dart
           echo "$IOS_GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          # Xcode projesi plist'i ios/ kokunde ariyor; her iki konuma da yaz
+          cp ios/Runner/GoogleService-Info.plist ios/GoogleService-Info.plist
           mkdir -p lib/config
           echo "$API_KEYS_DART_B64" | base64 --decode > lib/config/api_keys.dart
       - name: Set up code signing
