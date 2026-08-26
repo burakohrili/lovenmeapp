@@ -52,6 +52,7 @@ import '../../models/venue.dart';
 
 // Utils
 import 'utils/map_styles.dart';
+import '../../widgets/checkin_reward_sheet.dart';
 
 class MapPage extends ConsumerStatefulWidget {
   const MapPage({super.key});
@@ -2677,6 +2678,13 @@ class _MapPageState extends ConsumerState<MapPage>
           ),
         );
 
+        // 🎮 Kazanılan ilerlemeyi kutla (seri / seviye / rozet)
+        CheckInRewardSheet.showIfAny(
+          context,
+          reward: _checkInService.lastCheckInReward,
+          venueName: venue.name,
+        );
+
         // ❌ DON'T REOPEN: Let user manually open venue details if needed
         // Future.delayed(const Duration(milliseconds: 500), () {
         //   if (!_isDisposed && mounted) {
@@ -2776,6 +2784,13 @@ class _MapPageState extends ConsumerState<MapPage>
               margin: const EdgeInsets.all(16),
               duration: const Duration(seconds: 2),
             ),
+          );
+
+          // 🎮 Kazanılan ilerlemeyi kutla (seri / seviye / rozet)
+          CheckInRewardSheet.showIfAny(
+            context,
+            reward: _checkInService.lastCheckInReward,
+            venueName: venue.name,
           );
 
           // ❌ DON'T REOPEN: Let user manually open venue details if needed

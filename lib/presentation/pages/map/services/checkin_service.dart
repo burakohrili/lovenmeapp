@@ -15,6 +15,7 @@ import '../../../../utils/image_picker_service.dart';
 import '../../../../core/services/mayorship_request_service.dart';
 import '../../../../core/services/mayor_conflict_detection_service.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/gamification_service.dart';
 
 enum CheckInDisplayMode {
   map,
@@ -39,6 +40,27 @@ class CheckInCooldownStatus {
 class CheckInService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  /// Son başarılı check-in'de kazanılan ilerleme (seri / seviye / rozet).
+  /// Check-in akışı bool döndürdüğü için ödül bu alanda taşınır; UI
+  /// başarıdan sonra okuyup kutlama gösterir.
+  CheckInReward? lastCheckInReward;
+
+  /// Bu kullanıcı bu mekana daha önce hiç gelmiş mi? (kâşif rozetleri için)
+  Future<bool> _isNewVenueForUser(String userId, String venueId) async {
+    try {
+      final prior = await _firestore
+          .collection('check_ins')
+          .where('userId', isEqualTo: userId)
+          .where('venueId', isEqualTo: venueId)
+          .limit(2)
+          .get();
+      // Bu check-in zaten yazıldığı için 1 kayıt = ilk ziyaret.
+      return prior.docs.length <= 1;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // Kamera izni hata popup'ları
   static Future<void> _showPermissionDeniedDialog(BuildContext context) async {
@@ -600,7 +622,9 @@ class CheckInService {
     }
   }
 
-  Future<void> performCheckIn(
+  /// Check-in yapar ve kazanılan ilerlemeyi (seri / seviye / rozet) döner.
+  /// Çağıranlar dönüşü yok sayabilir; oyunlaştırma check-in'i asla engellemez.
+  Future<CheckInReward?> performCheckIn(
     Venue venue, {
     required double maxDistance,
     required LatLng? currentPosition,
@@ -631,6 +655,15 @@ class CheckInService {
     if (existingCheckIn.docs.isNotEmpty) {
       throw 'Bu mekana bugün zaten check-in yaptınız!';
     }
+
+    // Bu mekana daha önce hiç gelinmiş mi? (farklı mekan sayacı / kâşif rozetleri)
+    final priorVisit = await _firestore
+        .collection('check_ins')
+        .where('userId', isEqualTo: user.uid)
+        .where('venueId', isEqualTo: venue.placeId)
+        .limit(1)
+        .get();
+    final isNewVenue = priorVisit.docs.isEmpty;
 
     if (currentPosition != null && !venue.isFavorite) {
       final userLocation =
@@ -716,6 +749,12 @@ class CheckInService {
     // 🔄 YENİ SİSTEM: İlk check-in yapan günlük muhtar oluyor
     await _checkAndAssignDailyMayor(
         venue.placeId, user.uid, userName, userPhoto);
+
+    // 🎮 İlerleme katmanı: seri, seviye, rozet (tek kişilik de çalışır)
+    return GamificationService.registerCheckIn(
+      userId: user.uid,
+      isNewVenue: isNewVenue,
+    );
   }
 
   // 🔄 YENİ FONKSİYON: Günlük muhtar kontrolü ve atama
@@ -1808,6 +1847,12 @@ class CheckInService {
         caption: '${venue.name} mekanına check-in yaptı',
       );
 
+      // 🎮 İlerleme katmanı: seri, seviye, rozet (tek kişilik de çalışır)
+      lastCheckInReward = await GamificationService.registerCheckIn(
+        userId: user.uid,
+        isNewVenue: await _isNewVenueForUser(user.uid, venue.id),
+      );
+
       return true;
     } catch (e) {
       if (e is String) rethrow;
@@ -2038,6 +2083,12 @@ class CheckInService {
           caption: '${venue.name} mekanına fotoğraflı check-in yaptı',
         );
       } catch (feedError) {}
+
+      // 🎮 İlerleme katmanı: seri, seviye, rozet (tek kişilik de çalışır)
+      lastCheckInReward = await GamificationService.registerCheckIn(
+        userId: user.uid,
+        isNewVenue: await _isNewVenueForUser(user.uid, venue.id),
+      );
 
       return true;
     } catch (e) {
