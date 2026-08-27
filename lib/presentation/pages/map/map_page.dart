@@ -3540,8 +3540,12 @@ class _MapPageState extends ConsumerState<MapPage>
     final userCheckedIn = _userCheckedInVenues.contains(venue.id);
     final hasCheckedInUsers =
         _venueUserCounts[venue.id] != null && _venueUserCounts[venue.id]! > 0;
-    // Sponsorlu mekanlarda herkes kullanıcı listesini görebilir
-    final bool canSeeUsers = _isPremium || userCheckedIn || isSponsored;
+    // MEVCUDİYET KAPISI: Bir mekanın topluluğunu ancak oraya gerçekten
+    // check-in yapmış kullanıcı görebilir. Premium veya sponsorluk bu kapıyı
+    // ATLAMAZ — uygulama insan taranan bir yer değil, gerçek dünyada
+    // bulunmanın karşılığında topluluğa erişilen bir yer.
+    // Premium'un değeri kapıyı atlamak değil, geçmiş derinliği görmektir.
+    final bool canSeeUsers = userCheckedIn;
 
     // Get actual user count for this venue
     final int actualUserCount = _venueUserCounts[venue.id] ?? 0;

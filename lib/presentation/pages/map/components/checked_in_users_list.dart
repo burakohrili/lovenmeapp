@@ -26,7 +26,49 @@ class CheckedInUsersList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!canSeeUsers || venue.checkedInUsers.isEmpty) {
+    // MEVCUDİYET KAPISI: Bu mekana check-in yapmadıysan topluluğu göremezsin.
+    // "Henüz kimse yok" demek yanıltıcı olurdu — insanlar orada olabilir;
+    // erişim için gerçek dünyada bulunmuş olmak gerekiyor.
+    if (!canSeeUsers) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.location_on_outlined,
+                    size: 50, color: AppColors.primary),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Buranın topluluğu check-in ile açılır',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bu mekana check-in yaptığında buradaki topluluğu görebilir '
+                've bağlantı kurabilirsin.',
+                style: TextStyle(color: AppColors.grey600, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (venue.checkedInUsers.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

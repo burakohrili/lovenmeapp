@@ -6,6 +6,7 @@ import '../../../models/venue.dart';
 import '../../profile/user_profile_page.dart';
 import '../../home/home_page.dart';
 import '../services/checkin_service.dart';
+import 'venue_leaderboard_section.dart';
 
 class VenueDetailsSheet extends StatelessWidget {
   final Venue venue;
@@ -349,6 +350,10 @@ class VenueDetailsSheet extends StatelessWidget {
             ),
             if (_shouldShowMayorshipCard()) _buildDiamondMayorshipCard(),
             _buildVenueInfo(context),
+            _buildDivider(),
+            // Mekan içi sıralama: puan tablosu olduğu için check-in kapısının
+            // önünde durur; kişi listesi ve bağlantı kurma kapının arkasında.
+            VenueLeaderboardSection(venueId: venue.id),
             _buildDivider(),
             if (canSeeUsers) ...[
               _buildUsersHeader(),

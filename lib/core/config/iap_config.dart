@@ -151,7 +151,7 @@ class IAPConfig {
         'Sınırsız chat isteği',
         'Reklamsız deneyim',
         'Geçmiş check-in\'leri görüntüle',
-        'Mekanda check-in yapanları gör',
+        'Karşılaştığın kişilerin geçmişini gör',
         'Mekanda daha görünür ol',
         'Özel rozetler',
         'Öncelikli destek',

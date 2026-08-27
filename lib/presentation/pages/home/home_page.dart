@@ -1566,6 +1566,22 @@ class _FeedPostWidgetState extends State<FeedPostWidget>
         } catch (e) {}
       }
 
+      // MEVCUDİYET KAPISI: Akıştan açılan mekanda da topluluk yalnızca
+      // oraya check-in yapmış kullanıcıya açılır (haritadaki kural ile aynı).
+      bool userHasCheckedInHere = false;
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          final own = await FirebaseFirestore.instance
+              .collection('check_ins')
+              .where('userId', isEqualTo: uid)
+              .where('venueId', isEqualTo: venueId)
+              .limit(1)
+              .get();
+          userHasCheckedInHere = own.docs.isNotEmpty;
+        }
+      } catch (_) {}
+
       // Loading dialog'u kapat
       Navigator.of(context).pop();
 
@@ -1577,8 +1593,8 @@ class _FeedPostWidgetState extends State<FeedPostWidget>
         builder: (context) => VenueDetailsSheet(
           venue: venue,
           hasCheckedIn: false,
-          isCheckedIn: false,
-          canSeeUsers: true,
+          isCheckedIn: userHasCheckedInHere,
+          canSeeUsers: userHasCheckedInHere,
           isPremium: isPremium,
           isUpdatingFavorite: false,
           actualUserCount: checkedInUsers.length,

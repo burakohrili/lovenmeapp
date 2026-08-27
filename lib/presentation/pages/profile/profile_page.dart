@@ -37,6 +37,7 @@ import '../../../core/utils/form_validation_helper.dart';
 import '../../../core/models/payment_models.dart';
 import '../../../core/services/muhtar_firebase_service.dart';
 import '../../widgets/payment/universal_payment_button.dart';
+import '../../widgets/venue_progress_section.dart';
 // Payment pages removed - using only muhtar system now
 
 class ProfilePage extends ConsumerStatefulWidget {
@@ -882,7 +883,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
                   ],
                 ),
               ),
-              
+
+              // Keşif ilerlemesi: seri, seviye, rozetler (bireysel ilerleme)
+              const VenueProgressSection(),
+
               // 1. FOTOĞRAF
               if (photos.isNotEmpty)
                 _buildPhotoCard(photos[0], 0, userData),
