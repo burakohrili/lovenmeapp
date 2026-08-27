@@ -18,7 +18,8 @@
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
-initializeApp();
+// Cloud Shell'de proje kimligi ortamdan otomatik gelmeyebiliyor; acikca veriyoruz.
+initializeApp({projectId: process.env.GOOGLE_CLOUD_PROJECT || "lovenme-c1c2f"});
 
 const CONFIRM = process.argv.includes("--confirm");
 const db = getFirestore();

@@ -72,7 +72,13 @@
 	<!-- LOCATION PERMISSIONS -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Bu uygulama yakınındaki mekanları göstermek için konumuna ihtiyaç duyar.</string>
-	
+	<!-- ITMS-90683: geolocator ve permission_handler paketleri "Always"
+	     konum API'sine referans verdigi icin Apple bu metni zorunlu tutuyor.
+	     Uygulama arka planda konum ISTEMIYOR; yalnizca kullanim sirasinda
+	     (WhenInUse) konum aliyor. Metin bunu acikca soyluyor. -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Lovenme, yalnızca uygulamayı kullanırken yakınındaki mekanları göstermek ve check-in yapabilmen için konumunu kullanır. Arka planda konum takibi yapılmaz.</string>
+
 	
 	
 	<!-- iOS 14+ için hassas konum izni -->

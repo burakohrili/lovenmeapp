@@ -1,7 +1,7 @@
 name: lovenme
 description: "Venue-based community platform with mayor system for real-world connections. Connect with people through shared favorite places and become mayor of venues you love."
 publish_to: 'none'
-version: 1.1.0+41
+version: 1.1.0+42
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
