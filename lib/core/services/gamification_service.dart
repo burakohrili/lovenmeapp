@@ -99,10 +99,12 @@ class GamificationService {
 
         final data = snap.data() ?? <String, dynamic>{};
 
-        final previousTotal = (data['totalCheckIns'] as num?)?.toInt() ?? 0;
-        final previousLevel = levelFor(previousTotal);
-        // performCheckIn bu değeri zaten artırdığı için mevcut hâli kullanıyoruz.
-        final newLevel = levelFor(previousTotal);
+        // Check-in akışı totalCheckIns'i BU çağrıdan önce artırıyor; yani
+        // buradaki değer bu check-in dahil güncel toplam.
+        final currentTotal = (data['totalCheckIns'] as num?)?.toInt() ?? 0;
+        final newLevel = levelFor(currentTotal);
+        // Seviye atlandı mı: bu check-in'den ÖNCEKİ toplamın seviyesiyle kıyasla.
+        final previousLevel = levelFor(currentTotal > 0 ? currentTotal - 1 : 0);
 
         final uniqueVenues = ((data['uniqueVenuesVisited'] as num?)?.toInt() ?? 0) +
             (isNewVenue ? 1 : 0);
@@ -117,6 +119,9 @@ class GamificationService {
         int currentStreak = (data['currentStreak'] as num?)?.toInt() ?? 0;
         bool streakIncreased = false;
         bool streakReset = false;
+        // Seri koruması harcandıysa tek update içinde uygulanır; aynı dokümana
+        // birden fazla tx.update çağırmak riskli olduğu için biriktiriyoruz.
+        bool freezeUsed = false;
 
         if (lastDay == todayKey) {
           // Bugün zaten sayıldı; seri değişmez.
@@ -130,7 +135,7 @@ class GamificationService {
           if (lastDay != null && freezes > 0) {
             currentStreak += 1;
             streakIncreased = true;
-            tx.update(userRef, {'streakFreezes': FieldValue.increment(-1)});
+            freezeUsed = true;
           } else {
             streakReset = currentStreak > 1;
             currentStreak = 1;
@@ -147,7 +152,7 @@ class GamificationService {
             .toSet();
 
         final earned = _evaluateBadges(
-          totalCheckIns: previousTotal,
+          totalCheckIns: currentTotal,
           uniqueVenues: uniqueVenues,
           streak: currentStreak,
           owned: owned,
@@ -163,6 +168,9 @@ class GamificationService {
         if (earned.isNotEmpty) {
           updates['badges'] =
               FieldValue.arrayUnion(earned.map((b) => b.id).toList());
+        }
+        if (freezeUsed) {
+          updates['streakFreezes'] = FieldValue.increment(-1);
         }
         tx.update(userRef, updates);
 

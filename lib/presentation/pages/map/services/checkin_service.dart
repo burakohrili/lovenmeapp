@@ -47,10 +47,16 @@ class CheckInService {
   CheckInReward? lastCheckInReward;
 
   /// Bu kullanıcı bu mekana daha önce hiç gelmiş mi? (kâşif rozetleri için)
+  ///
+  /// check_ins her gün cleanupVenueCheckIns tarafindan check_in_history'ye
+  /// tasinip siliniyor. Oraya bakarsak ayni mekana her gun giden kullanici
+  /// her seferinde "yeni mekan" sayilir ve kasif rozetleri haksiz sisirdi.
+  /// Bu yuzden kalici gecmise bakiyoruz (history check-in aninda yazilir,
+  /// bu check-in dahil).
   Future<bool> _isNewVenueForUser(String userId, String venueId) async {
     try {
       final prior = await _firestore
-          .collection('check_ins')
+          .collection('check_in_history')
           .where('userId', isEqualTo: userId)
           .where('venueId', isEqualTo: venueId)
           .limit(2)
