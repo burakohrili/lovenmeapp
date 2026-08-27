@@ -45,11 +45,23 @@ class LeaderboardService {
     int limit = 10,
   }) async {
     try {
-      final snapshot = await _firestore
-          .collection('check_ins')
+      // check_ins düzenli olarak temizleniyor (cleanupVenueCheckIns), bu yüzden
+      // sıralama 30 gün saklanan check_in_history üzerinden hesaplanır.
+      // Böylece mekanın sıralaması anlık değil, son bir aylık katılıma dayanır.
+      var snapshot = await _firestore
+          .collection('check_in_history')
           .where('venueId', isEqualTo: venueId)
           .limit(500)
           .get();
+
+      // Geçmiş boşsa (eski kayıtlar) güncel check-in'lere düş
+      if (snapshot.docs.isEmpty) {
+        snapshot = await _firestore
+            .collection('check_ins')
+            .where('venueId', isEqualTo: venueId)
+            .limit(500)
+            .get();
+      }
 
       if (snapshot.docs.isEmpty) return [];
 

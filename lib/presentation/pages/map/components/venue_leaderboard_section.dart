@@ -44,7 +44,27 @@ class VenueLeaderboardSection extends StatelessWidget {
         }
 
         final entries = snapshot.data ?? const <LeaderboardEntry>[];
-        if (entries.isEmpty) return const SizedBox.shrink();
+
+        // Boşken gizlemek yerine davet göster: sıralama mekanın kalıcı bir
+        // parçası, henüz kimse yoksa ilk sırayı almak bir teşvik.
+        if (entries.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events_outlined,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Bu mekanda henüz sıralama yok — ilk sırayı sen al.',
+                    style: TextStyle(fontSize: 13, color: AppColors.grey600),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),

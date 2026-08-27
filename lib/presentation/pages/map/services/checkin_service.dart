@@ -1753,7 +1753,7 @@ class CheckInService {
       // 📍 MESAFE KONTROLÜ: 200 metre içinde olmak zorunlu
       if (currentPosition != null) {
         final distance = _calculateDistance(currentPosition, venue.location);
-        if (distance > 15.0) {
+        if (distance > 200.0) {
           throw 'Check-in yapmak için mekana yakın olmanız gerekiyor! (${distance.toStringAsFixed(0)}m uzakta)';
         }
       }
@@ -1969,7 +1969,7 @@ class CheckInService {
       // 📍 MESAFE KONTROLÜ: 200 metre içinde olmak zorunlu
       if (currentPosition != null) {
         final distance = _calculateDistance(currentPosition, venue.location);
-        if (distance > 15.0) {
+        if (distance > 200.0) {
           throw 'Check-in yapmak için mekana yakın olmanız gerekiyor! (${distance.toStringAsFixed(0)}m uzakta)';
         }
       }

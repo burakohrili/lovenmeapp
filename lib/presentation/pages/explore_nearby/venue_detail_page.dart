@@ -26,12 +26,31 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
   bool _isLoading = true;
   VenueDetail? _venueDetail;
   bool _isPremium = false;
+  bool _userCheckedInHere = false;
   final _exploreService = ExploreNearbyService();
+
+  /// MEVCUDİYET KAPISI: Bu mekana daha önce check-in yapılmış mı?
+  /// Haritadaki kural ile aynı — topluluk yalnızca oraya gitmiş kullanıcıya
+  /// açılır; premium bu kapıyı ATLAMAZ.
+  Future<void> _checkUserPresence() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final own = await FirebaseFirestore.instance
+          .collection('check_ins')
+          .where('userId', isEqualTo: uid)
+          .where('venueId', isEqualTo: widget.venueId)
+          .limit(1)
+          .get();
+      if (mounted) setState(() => _userCheckedInHere = own.docs.isNotEmpty);
+    } catch (_) {}
+  }
 
   @override
   void initState() {
     super.initState();
     _checkPremiumStatus();
+    _checkUserPresence();
     _loadVenueDetail();
     _setupPeriodicRefresh();
   }
@@ -308,6 +327,41 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
   }
 
   Widget _buildCheckedInUsers() {
+    // MEVCUDİYET KAPISI: Check-in yapmadıysan bu mekanın topluluğunu göremezsin.
+    if (!_userCheckedInHere) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline,
+                  size: 40, color: AppColors.primary),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Check-in Gerekli',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Bu mekandaki kişileri görmek için önce check-in yapmalısınız',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.grey600),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Muhtar ve diğer kullanıcıları ayır
     VenueUser? mayor;
     List<VenueUser> otherUsers = [];
