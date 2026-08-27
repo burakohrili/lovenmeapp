@@ -1576,9 +1576,11 @@ class _FeedPostWidgetState extends State<FeedPostWidget>
               .collection('check_ins')
               .where('userId', isEqualTo: uid)
               .where('venueId', isEqualTo: venueId)
-              .limit(1)
+              .limit(5)
               .get();
-          userHasCheckedInHere = own.docs.isNotEmpty;
+          // Kayıt sırasındaki favori seçimi gerçek ziyaret sayılmaz.
+          userHasCheckedInHere = own.docs
+              .any((d) => d.data()['isInitialRegistration'] != true);
         }
       } catch (_) {}
 

@@ -40,9 +40,12 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
           .collection('check_ins')
           .where('userId', isEqualTo: uid)
           .where('venueId', isEqualTo: widget.venueId)
-          .limit(1)
+          .limit(5)
           .get();
-      if (mounted) setState(() => _userCheckedInHere = own.docs.isNotEmpty);
+      // Kayıt sırasındaki favori seçimi gerçek ziyaret sayılmaz.
+      final real = own.docs
+          .any((d) => d.data()['isInitialRegistration'] != true);
+      if (mounted) setState(() => _userCheckedInHere = real);
     } catch (_) {}
   }
 

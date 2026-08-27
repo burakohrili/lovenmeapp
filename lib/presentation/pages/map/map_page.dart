@@ -1355,7 +1355,12 @@ class _MapPageState extends ConsumerState<MapPage>
                 isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
             .get();
 
+        // MEVCUDİYET KAPISI: Kayıt sırasında favori mekan seçince konum
+        // doğrulaması olmadan check-in yazılıyor (isInitialRegistration=true).
+        // Bunlar gerçek bir ziyaret değil, bu yüzden topluluk kapısını AÇMAZ.
+        // (Cooldown mantığı da aynı ayrımı yapıyor.)
         _userCheckedInVenues = checkInsSnapshot.docs
+            .where((doc) => doc.data()['isInitialRegistration'] != true)
             .map((doc) => doc.data()['venueId'] as String)
             .toSet();
       }
