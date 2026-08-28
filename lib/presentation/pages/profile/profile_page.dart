@@ -37,7 +37,9 @@ import '../../../core/utils/form_validation_helper.dart';
 import '../../../core/models/payment_models.dart';
 import '../../../core/services/muhtar_firebase_service.dart';
 import '../../widgets/payment/universal_payment_button.dart';
+import '../../../core/services/gamification_service.dart';
 import '../../widgets/venue_progress_section.dart';
+import '../../widgets/saved_venues_section.dart';
 // Payment pages removed - using only muhtar system now
 
 class ProfilePage extends ConsumerStatefulWidget {
@@ -827,13 +829,19 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
                     
                     const SizedBox(height: 8),
                     
-                    // Yaş, Cinsiyet ve Elmas Bakiyesi
+                    // Kâşif kimliği ve Elmas Bakiyesi
+                    // NOT: Burada eskiden yaş/cinsiyet gösteriliyordu. Kimlik
+                    // artık demografiye değil, gezip keşfedilene dayanıyor.
+                    // Veriler Firestore'da korunuyor, sadece gösterilmiyor.
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Yaş ve Cinsiyet
                         Text(
-                          '$age yaşında${gender.isNotEmpty ? ' • $gender' : ''}',
+                          GamificationService.levelTitle(
+                            GamificationService.levelFor(
+                              (userData['totalCheckIns'] as num?)?.toInt() ?? 0,
+                            ),
+                          ),
                           style: const TextStyle(
                             fontSize: 18,
                             color: AppColors.grey600,
@@ -886,6 +894,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
 
               // Keşif ilerlemesi: seri, seviye, rozetler (bireysel ilerleme)
               const VenueProgressSection(),
+
+              // "Gitmek İstiyorum" listesi — kaydedilen yerleri gerçek
+              // ziyarete dönüştüren döngünün profildeki yüzü
+              const SavedVenuesSection(),
 
               // 1. FOTOĞRAF
               if (photos.isNotEmpty)

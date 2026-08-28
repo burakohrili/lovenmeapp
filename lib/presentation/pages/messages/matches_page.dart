@@ -469,8 +469,15 @@ class MatchesPage extends ConsumerWidget {
               ),
               overflow: TextOverflow.ellipsis,
             ),
+            // Bağlantının GEREKÇESİ gösterilir: yaş değil, ortak mekan.
+            // Uygulamanın vaadi bu — bağlantılar gerçek dünyada aynı yerde
+            // bulunmaktan doğar.
             Text(
-              '${match.age} yaşında',
+              match.commonCheckIns > 0
+                  ? '${match.commonCheckIns} kez aynı mekanda'
+                  : (match.commonVenues.isNotEmpty
+                      ? match.commonVenues.first
+                      : 'Mekan bağlantısı'),
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.grey600,

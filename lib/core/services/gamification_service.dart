@@ -21,6 +21,9 @@ class CheckInReward {
   final bool levelUp;
   final List<BadgeDef> newBadges;
 
+  /// Bu check-in, "Gitmek İstiyorum" listesindeki bir kaydı kapattı mı?
+  final bool closedFromList;
+
   const CheckInReward({
     required this.currentStreak,
     required this.streakIncreased,
@@ -28,9 +31,11 @@ class CheckInReward {
     required this.level,
     required this.levelUp,
     required this.newBadges,
+    this.closedFromList = false,
   });
 
-  bool get hasAnything => streakIncreased || levelUp || newBadges.isNotEmpty;
+  bool get hasAnything =>
+      streakIncreased || levelUp || newBadges.isNotEmpty || closedFromList;
 }
 
 /// Mekan keşif oyununun ilerleme katmanı: seri, seviye ve rozetler.
@@ -54,6 +59,12 @@ class GamificationService {
     BadgeDef('checkin_10', 'Alışkanlık', 'Toplam 10 check-in', '📍'),
     BadgeDef('checkin_50', 'Müdavim', 'Toplam 50 check-in', '🎯'),
     BadgeDef('checkin_100', 'Yüzler Kulübü', 'Toplam 100 check-in', '💯'),
+    // "Gitmek İstiyorum" listesini kapatma rozetleri: kaydetmek değil,
+    // gerçekten gitmek ödüllendirilir.
+    BadgeDef('list_first', 'Sözünü Tuttun',
+        'Listendeki bir mekana gerçekten gittin', '🎯'),
+    BadgeDef('list_5', 'Erteleme Yok', 'Listenden 5 mekanı tamamladın', '🚀'),
+    BadgeDef('list_15', 'Liste Avcısı', 'Listenden 15 mekanı tamamladın', '🏹'),
   ];
 
   static BadgeDef? badgeById(String id) {
@@ -73,6 +84,27 @@ class GamificationService {
     return 1;
   }
 
+  /// Seviyeye karşılık gelen kâşif unvanı.
+  ///
+  /// Profildeki kimlik satırında yaş/cinsiyet yerine bu kullanılır: kullanıcı
+  /// demografisiyle değil, gezip keşfettiğiyle tanımlanır.
+  static String levelTitle(int level) {
+    switch (level) {
+      case 6:
+        return 'Efsane Kâşif';
+      case 5:
+        return 'Usta Gezgin';
+      case 4:
+        return 'Şehir Kâşifi';
+      case 3:
+        return 'Gezgin';
+      case 2:
+        return 'Kâşif';
+      default:
+        return 'Yeni Kâşif';
+    }
+  }
+
   /// Bir sonraki seviye için gereken toplam check-in (son seviyede null).
   static int? nextLevelAt(int level) {
     const thresholds = {1: 5, 2: 10, 3: 25, 4: 50, 5: 100};
@@ -89,6 +121,8 @@ class GamificationService {
   static Future<CheckInReward> registerCheckIn({
     required String userId,
     required bool isNewVenue,
+    bool closedFromList = false,
+    int listVisitedCount = 0,
   }) async {
     try {
       final userRef = _firestore.collection('users').doc(userId);
@@ -155,6 +189,7 @@ class GamificationService {
           totalCheckIns: currentTotal,
           uniqueVenues: uniqueVenues,
           streak: currentStreak,
+          listVisited: listVisitedCount,
           owned: owned,
         );
 
@@ -181,6 +216,7 @@ class GamificationService {
           level: newLevel,
           levelUp: newLevel > previousLevel,
           newBadges: earned,
+          closedFromList: closedFromList,
         );
       });
     } catch (_) {
@@ -241,6 +277,7 @@ class GamificationService {
     required int totalCheckIns,
     required int uniqueVenues,
     required int streak,
+    required int listVisited,
     required Set<String> owned,
   }) {
     final earned = <BadgeDef>[];
@@ -262,6 +299,9 @@ class GamificationService {
     award('streak_3', streak >= 3);
     award('streak_7', streak >= 7);
     award('streak_30', streak >= 30);
+    award('list_first', listVisited >= 1);
+    award('list_5', listVisited >= 5);
+    award('list_15', listVisited >= 15);
 
     return earned;
   }

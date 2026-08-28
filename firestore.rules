@@ -395,5 +395,17 @@ match /restored_purchases/{restoreId} {
       allow update: if false;
       allow delete: if false;
     }
+
+    // Saved Venues — "Gitmek İstiyorum" listesi.
+    // Kişisel bir listedir: kullanıcı yalnızca KENDİ kayıtlarını okuyabilir
+    // ve değiştirebilir; başkasının listesi görünmez.
+    match /saved_venues/{savedId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.userId == request.auth.uid;
+    }
   }
 }

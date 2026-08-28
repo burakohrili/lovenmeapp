@@ -61,6 +61,10 @@ class CheckInRewardSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          if (reward.closedFromList) ...[
+            _listClosedBlock(),
+            const SizedBox(height: 16),
+          ],
           if (reward.streakIncreased) _streakBlock(),
           if (reward.levelUp) ...[
             const SizedBox(height: 16),
@@ -97,6 +101,36 @@ class CheckInRewardSheet extends StatelessWidget {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Kaydettiğin ama gitmediğin bir yeri gerçekten ziyaret ettin —
+  /// uygulamanın çekirdek vaadi tam olarak bu an.
+  Widget _listClosedBlock() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          const Text('🎯', style: TextStyle(fontSize: 34)),
+          const SizedBox(height: 8),
+          const Text(
+            'Listendeki yeri tamamladın!',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Kaydetmekle kalmadın, gerçekten gittin.',
+            style: TextStyle(fontSize: 12, color: AppColors.grey600),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

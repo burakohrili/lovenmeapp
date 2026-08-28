@@ -153,12 +153,10 @@ class _ProfileSetupStep1PageState extends ConsumerState<ProfileSetupStep1Page> {
     return null;
   }
 
-  String? _validateGender() {
-    if (_selectedGender == null || _selectedGender!.isEmpty) {
-      return 'Cinsiyet seçimi gerekli';
-    }
-    return null;
-  }
+  // NOT: Burada _validateGender() vardı ama hiçbir yerden çağrılmıyordu
+  // (ölü kod). Cinsiyet bilinçli olarak OPSİYONEL — kimlik demografiye
+  // değil, gezilen mekanlara dayanıyor. Kaldırıldı ki ileride "zorunlu mu?"
+  // tereddüdü doğmasın.
 
   void _handleNext() {
     // Cinsiyet opsiyonel (Apple 4.3 uyumu)

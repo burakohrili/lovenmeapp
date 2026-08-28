@@ -34,6 +34,7 @@ import '../../../core/models/premium_models.dart';
 
 // Components
 import 'components/venue_details_sheet.dart';
+import 'components/saved_nearby_banner.dart';
 import 'components/checked_in_users_list.dart';
 
 // Widgets
@@ -3362,6 +3363,18 @@ class _MapPageState extends ConsumerState<MapPage>
             trafficEnabled: false, // Keep disabled for performance
             onCameraMove: _onCameraMove,
             onCameraIdle: _onCameraIdle,
+          ),
+
+          // "Kaydettiğin yer yakınında" hatırlatması — uygulamanın çekirdek
+          // vaadi: kaydedilen yeri gerçekten ziyarete dönüştürmek.
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 80,
+            left: 16,
+            right: 16,
+            child: SavedNearbyBanner(
+              latitude: _currentPosition?.latitude,
+              longitude: _currentPosition?.longitude,
+            ),
           ),
 
           // My Location Button - Sağ üst köşe

@@ -7,6 +7,7 @@ import '../../profile/user_profile_page.dart';
 import '../../home/home_page.dart';
 import '../services/checkin_service.dart';
 import 'venue_leaderboard_section.dart';
+import '../../../widgets/save_venue_button.dart';
 
 class VenueDetailsSheet extends StatelessWidget {
   final Venue venue;
@@ -349,6 +350,19 @@ class VenueDetailsSheet extends StatelessWidget {
               ],
             ),
             if (_shouldShowMayorshipCard()) _buildDiamondMayorshipCard(),
+            // "Gitmek İstiyorum": henüz gidilmemiş yerler için niyet listesi.
+            // Favori (kalp) butonundan farklı — o, gidilmiş yerler için.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: SaveVenueButton(
+                venueId: venue.id,
+                venueName: venue.name,
+                venueCategory: venue.category,
+                latitude: venue.location.latitude,
+                longitude: venue.location.longitude,
+                vicinity: venue.vicinity,
+              ),
+            ),
             _buildVenueInfo(context),
             _buildDivider(),
             // Mekan içi sıralama: puan tablosu olduğu için check-in kapısının

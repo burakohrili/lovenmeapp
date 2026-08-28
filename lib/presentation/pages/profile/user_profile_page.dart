@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/gamification_service.dart';
 import '../../../core/services/chat_request_service.dart';
 import '../../../core/services/premium_service.dart';
 import '../../../widgets/photo_viewer.dart';
@@ -861,9 +862,11 @@ class _UserProfilePageState extends State<UserProfilePage>
           
           const SizedBox(height: 8),
           
-          // Yaş ve Cinsiyet
+          // Kimlik demografiye değil, gezip keşfedilene dayanıyor.
+          // Yaş/cinsiyet verisi korunuyor, sadece gösterilmiyor.
           Text(
-            '$age yaşında${gender.isNotEmpty ? ' • $gender' : ''}',
+            GamificationService.levelTitle(GamificationService.levelFor(
+                (_userProfile?['totalCheckIns'] as num?)?.toInt() ?? 0)),
             style: const TextStyle(
               fontSize: 18,
               color: AppColors.grey600,

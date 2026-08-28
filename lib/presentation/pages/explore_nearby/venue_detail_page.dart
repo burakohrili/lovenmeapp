@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import 'models/venue_detail_model.dart';
 import 'services/explore_nearby_service.dart';
 import '../profile/user_profile_page.dart';
+import '../../widgets/save_venue_button.dart';
 
 class VenueDetailPage extends ConsumerStatefulWidget {
   final String venueId;
@@ -176,6 +177,18 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildVenueInfo(),
+                  // "Gitmek İstiyorum" — henüz gidilmemiş yerler için niyet listesi
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 8),
+                    child: SaveVenueButton(
+                      venueId: widget.venueId,
+                      venueName: _venueDetail!.name,
+                      venueCategory: _venueDetail!.category,
+                      latitude: _venueDetail!.latitude ?? 0,
+                      longitude: _venueDetail!.longitude ?? 0,
+                    ),
+                  ),
                   _buildCheckedInUsers(),
                   _buildFeaturesSection(),
                   const SizedBox(height: 24),

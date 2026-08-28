@@ -16,6 +16,7 @@ import '../../../../core/services/mayorship_request_service.dart';
 import '../../../../core/services/mayor_conflict_detection_service.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/gamification_service.dart';
+import '../../../../core/services/saved_venues_service.dart';
 
 enum CheckInDisplayMode {
   map,
@@ -1854,9 +1855,18 @@ class CheckInService {
       );
 
       // 🎮 İlerleme katmanı: seri, seviye, rozet (tek kişilik de çalışır)
+      // "Gitmek Istiyorum" listesindeki kaydi bu ziyaret kapatiyor mu?
+      final closedFromList =
+          await SavedVenuesService.markVisited(user.uid, venue.id);
+      final listVisited = closedFromList
+          ? await SavedVenuesService.visitedCount(user.uid)
+          : 0;
+
       lastCheckInReward = await GamificationService.registerCheckIn(
         userId: user.uid,
         isNewVenue: await _isNewVenueForUser(user.uid, venue.id),
+        closedFromList: closedFromList,
+        listVisitedCount: listVisited,
       );
 
       return true;
@@ -2091,9 +2101,18 @@ class CheckInService {
       } catch (feedError) {}
 
       // 🎮 İlerleme katmanı: seri, seviye, rozet (tek kişilik de çalışır)
+      // "Gitmek Istiyorum" listesindeki kaydi bu ziyaret kapatiyor mu?
+      final closedFromList =
+          await SavedVenuesService.markVisited(user.uid, venue.id);
+      final listVisited = closedFromList
+          ? await SavedVenuesService.visitedCount(user.uid)
+          : 0;
+
       lastCheckInReward = await GamificationService.registerCheckIn(
         userId: user.uid,
         isNewVenue: await _isNewVenueForUser(user.uid, venue.id),
+        closedFromList: closedFromList,
+        listVisitedCount: listVisited,
       );
 
       return true;
