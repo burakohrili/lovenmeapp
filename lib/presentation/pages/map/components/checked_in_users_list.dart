@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/checkedin_user.dart';  // Doğru model import'u
 import '../../../models/venue.dart';
+import '../../profile/user_profile_page.dart';
 
 class CheckedInUsersList extends StatelessWidget {
   final Venue venue;
@@ -178,7 +179,31 @@ class UserListItem extends StatelessWidget {
         color: AppColors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: null, // Profil tıklamayı devre dışı bırak
+          // PROFİLİ AÇ. Eskiden kapalıydı (`onTap: null`): kullanıcı birine
+          // bağlantı isteği gönderebiliyor ama önce profiline BAKAMIYORDU.
+          // Hem tuhaf hem güvenlik açısından yanlıştı — kime istek attığını
+          // görebilmelisin.
+          //
+          // Bu liste zaten mevcudiyet kapısının ARKASINDA: buraya ancak o
+          // mekana check-in yapmış biri ulaşabiliyor. Dolayısıyla profil
+          // açmak bir "insan tarama" yüzeyi yaratmıyor.
+          onTap: isCurrentUser
+              ? null
+              : () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: AppColors.transparent,
+                    builder: (_) => DraggableScrollableSheet(
+                      initialChildSize: 0.9,
+                      minChildSize: 0.5,
+                      maxChildSize: 0.95,
+                      builder: (context, scrollController) => UserProfilePage(
+                        userId: user.id,
+                        showActions: true,
+                        isBottomSheet: true,
+                      ),
+                    ),
+                  ),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(

@@ -8,7 +8,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/services/auto_login_service.dart';
+import '../../../core/services/native_auto_login_service.dart';
 import '../auth/login_page.dart';
 import '../../widgets/premium/premium_subscription_widget.dart';
 import '../safety/community_guidelines_page.dart';
@@ -16,6 +16,8 @@ import '../safety/community_guidelines_page.dart';
 import '../../../widgets/production_button.dart';
 import '../../../core/utils/loading_state_manager.dart';
 import '../../../core/utils/form_validation_helper.dart';
+import '../../../core/legal/legal_documents.dart';
+import '../../../core/services/iap_service.dart';
 
 class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
@@ -34,13 +36,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
   // Ayarlar - varsayılan değerler
   bool mapVisibility = true;
+  /// Arkadaşlarım check-in'lerimi "Bugün" sekmesinde görsün mü?
+  bool shareActivityWithFriends = true;
   bool profileActive = true;
   bool notifications = true;
   bool matchNotifications = true;
   bool messageNotifications = true;
 
   // Cinsiyet tercihleri (Eşleşme için)
-  List<String> genderPreferences = [];
   final List<String> preferenceOptions = ['Erkek', 'Kadın', 'Diğer'];
 
   // Kullanıcı bilgileri
@@ -80,29 +83,20 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
             // Ayarları yükle - null kontrolü ile
             mapVisibility = data['mapVisibility'] ?? true;
+            shareActivityWithFriends =
+                data['shareActivityWithFriends'] ?? true;
             profileActive = data['profileActive'] ?? true;
             notifications = data['notifications'] ?? true;
             matchNotifications = data['matchNotifications'] ?? true;
             messageNotifications = data['messageNotifications'] ?? true;
             isPremium = data['isPremium'] ?? false;
 
-            // Cinsiyet tercihleri
-            if (data['genderPreferences'] != null &&
-                data['genderPreferences'] is List) {
-              genderPreferences = List<String>.from(data['genderPreferences']);
-            } else {
-              // Varsayılan olarak herkesi göster
-              genderPreferences = ['Erkek', 'Kadın', 'Diğer'];
-            }
 
             // Engellenen kullanıcılar
             if (data['blockedUsers'] != null && data['blockedUsers'] is List) {
               blockedUsers = List<String>.from(data['blockedUsers']);
             }
           });
-        } else {
-          // Varsayılan tercihler
-          genderPreferences = ['Erkek', 'Kadın', 'Diğer'];
         }
       }
     } catch (e) {
@@ -131,11 +125,11 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         await _firestore.collection('users').doc(user.uid).set(
             {
               'mapVisibility': mapVisibility,
+              'shareActivityWithFriends': shareActivityWithFriends,
               'profileActive': profileActive,
               'notifications': notifications,
               'matchNotifications': matchNotifications,
               'messageNotifications': messageNotifications,
-              'genderPreferences': genderPreferences, // Cinsiyet tercihleri
               'updatedAt': FieldValue.serverTimestamp(),
             },
             SetOptions(
@@ -166,116 +160,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   }
 
   // CİNSİYET TERCİHLERİ DİYALOGU
-  void _showGenderPreferencesDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.people, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Kimleri Görmek İstersin?'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Keşfet sayfasında hangi cinsiyetteki kullanıcıları görmek istersin?',
-                    style: TextStyle(fontSize: 14, color: AppColors.grey600),
-                  ),
-                  const SizedBox(height: 20),
-                  ...preferenceOptions.map((option) {
-                    final isSelected = genderPreferences.contains(option);
-                    return CheckboxListTile(
-                      title: Text(option),
-                      value: isSelected,
-                      activeColor: AppColors.primary,
-                      onChanged: (bool? value) {
-                        setDialogState(() {
-                          if (value == true) {
-                            if (!genderPreferences.contains(option)) {
-                              genderPreferences.add(option);
-                            }
-                          } else {
-                            // En az bir seçenek seçili kalmalı
-                            if (genderPreferences.length > 1) {
-                              genderPreferences.remove(option);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text('En az bir tercih seçili olmalı'),
-                                  backgroundColor: AppColors.warning,
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            }
-                          }
-                        });
-                      },
-                    );
-                  }),
-                  const Divider(),
-                  // Hepsini seç/kaldır butonu
-                  TextButton.icon(
-                    onPressed: () {
-                      setDialogState(() {
-                        if (genderPreferences.length == 3) {
-                          // Hepsi seçiliyse sadece ilkini bırak
-                          genderPreferences = [preferenceOptions[0]];
-                        } else {
-                          // Hepsini seç
-                          genderPreferences = List.from(preferenceOptions);
-                        }
-                      });
-                    },
-                    icon: Icon(
-                      genderPreferences.length == 3
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      color: AppColors.primary,
-                    ),
-                    label: Text(
-                      genderPreferences.length == 3
-                          ? 'Tümünü Kaldır'
-                          : 'Tümünü Seç',
-                      style: const TextStyle(color: AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    // İptal edilirse eski haline döndür
-                    _loadUserSettings();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('İptal'),
-                ),
-                ProductionButton(
-                  text: 'Kaydet',
-                  onPressed: () {
-                    setState(() {}); // Ana sayfayı güncelle
-                    _saveSettings(); // Firebase'e kaydet
-                    Navigator.pop(context);
-                  },
-                  isLoading:
-                      _loadingManager.isLoading('save_gender_preferences'),
-                  width: 100,
-                  height: 40,
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
   // EMAIL DEĞİŞTİR
   void _showChangeEmailDialog() {
@@ -736,12 +620,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
         if (result.data['success'] == true) {
           // Doğrulama kodunu geçici olarak sakla (10 dakika)
+          // GÜVENLİK: Yeni şifre buraya YAZILMIYOR. Eskiden düz metin olarak
+          // Firestore'da bekliyordu; doğrulama zaten `newPassword` parametresini
+          // aldığı için saklamaya hiç gerek yok.
           await _firestore
               .collection('password_verifications')
               .doc(user.uid)
               .set({
             'code': code,
-            'newPassword': newPassword,
             'userId': user.uid,
             'createdAt': FieldValue.serverTimestamp(),
             'expiresAt': DateTime.now().add(const Duration(minutes: 10)),
@@ -800,7 +686,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
         final verificationData = verificationDoc.data()!;
         final storedCode = verificationData['code'];
-        final storedPassword = verificationData['newPassword'];
         final expiresAt = (verificationData['expiresAt'] as Timestamp).toDate();
 
         if (DateTime.now().isAfter(expiresAt)) {
@@ -812,7 +697,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         }
 
         // Şifreyi güncelle
-        await user.updatePassword(storedPassword);
+        // Parametreden gelen şifre kullanılıyor; Firestore'da saklanmıyor.
+        await user.updatePassword(newPassword);
 
         // Doğrulama kodunu sil
         await _firestore
@@ -1214,6 +1100,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   }
 
   // HESABI SİL
+  /// Hesabı siler.
+  ///
+  /// Silme işi tamamen SUNUCUDA yapılır. Eskiden burada tek bir WriteBatch
+  /// vardı; atomik olduğu için tek bir alt işlem reddedilince (örneğin
+  /// kullanıcıyı biri engellemişse) `users/{uid}` dahil hiçbir şey
+  /// silinmiyordu ve Auth hesabı ayakta kalıyordu. Ayrıca sorguların dördü
+  /// var olmayan alan adlarını kullandığı için özel mesajlar hiç silinmiyordu.
   Future<void> _deleteAccount() async {
     try {
       await _loadingManager.executeOperation(
@@ -1222,133 +1115,36 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
           final user = _auth.currentUser;
           if (user == null) return;
 
-          final uid = user.uid;
+          final functions =
+              FirebaseFunctions.instanceFor(region: 'us-central1');
+          final result =
+              await functions.httpsCallable('deleteAccount').call({});
 
-          // 1. Firestore'dan kullanıcı verilerini sil
-          final batch = _firestore.batch();
-
-          // Kullanıcı dokümanını sil
-          batch.delete(_firestore.collection('users').doc(uid));
-
-          // Matches koleksiyonundan kullanıcıyı sil
-          final matchesQuery = await _firestore
-              .collection('matches')
-              .where('users', arrayContains: uid)
-              .get();
-
-          for (var doc in matchesQuery.docs) {
-            batch.delete(doc.reference);
+          final data = Map<String, dynamic>.from(result.data as Map);
+          if (data['success'] != true) {
+            throw data['error'] ?? 'Hesap silinemedi';
           }
 
-          // Messages koleksiyonundan mesajları sil
-          final messagesQuery = await _firestore
-              .collection('messages')
-              .where('participants', arrayContains: uid)
-              .get();
+          // Cihazdaki oturum ve tercihleri temizle.
+          await NativeAutoLoginService().clearAutoLoginData();
 
-          for (var doc in messagesQuery.docs) {
-            batch.delete(doc.reference);
-          }
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+            (route) => false,
+          );
 
-          // Likes koleksiyonundan beğenileri sil
-          final likesQuery1 = await _firestore
-              .collection('likes')
-              .where('from', isEqualTo: uid)
-              .get();
-
-          final likesQuery2 = await _firestore
-              .collection('likes')
-              .where('to', isEqualTo: uid)
-              .get();
-
-          for (var doc in likesQuery1.docs) {
-            batch.delete(doc.reference);
-          }
-
-          for (var doc in likesQuery2.docs) {
-            batch.delete(doc.reference);
-          }
-
-          // Blocked users koleksiyonundan kayıtları sil
-          final blockedQuery1 = await _firestore
-              .collection('blocked_users')
-              .where('blocker', isEqualTo: uid)
-              .get();
-
-          final blockedQuery2 = await _firestore
-              .collection('blocked_users')
-              .where('blocked', isEqualTo: uid)
-              .get();
-
-          for (var doc in blockedQuery1.docs) {
-            batch.delete(doc.reference);
-          }
-
-          for (var doc in blockedQuery2.docs) {
-            batch.delete(doc.reference);
-          }
-
-          // Reports koleksiyonundan raporları sil
-          final reportsQuery1 = await _firestore
-              .collection('reports')
-              .where('reporter', isEqualTo: uid)
-              .get();
-
-          final reportsQuery2 = await _firestore
-              .collection('reports')
-              .where('reported', isEqualTo: uid)
-              .get();
-
-          for (var doc in reportsQuery1.docs) {
-            batch.delete(doc.reference);
-          }
-
-          for (var doc in reportsQuery2.docs) {
-            batch.delete(doc.reference);
-          }
-
-          // Firestore batch işlemini gerçekleştir
-          await batch.commit();
-
-          // 2. Firebase Storage'dan fotoğrafları sil
-          try {
-            final storageRef = FirebaseStorage.instance.ref('user_photos/$uid');
-            final listResult = await storageRef.listAll();
-
-            for (var item in listResult.items) {
-              await item.delete();
-            }
-          } catch (storageError) {
-            // Storage silme hatası - devam et
-          }
-
-          // 3. Auto login verilerini temizle
-          final autoLoginService = AutoLoginService();
-          await autoLoginService.clearAutoLoginData();
-
-          // 4. Auth hesabını sil
-          await user.delete();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Hesabınız ve tüm verileriniz silindi.'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 4),
+            ),
+          );
         },
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hesabınız ve tüm verileri başarıyla silindi'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-
-        // Login sayfasına yönlendir
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-          (route) => false,
-        );
-      }
     } catch (e) {
       if (mounted) {
-        // Yeniden kimlik doğrulama gerekebilir
         if (e.toString().contains('requires-recent-login')) {
           _showReauthenticateDialog(onSuccess: _deleteAccount);
         } else {
@@ -1365,7 +1161,31 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     }
   }
 
-  // YENİDEN KİMLİK DOĞRULAMA
+  /// Satın alımları geri yükler (App Store 3.1.1).
+  Future<void> _restorePurchases() async {
+    try {
+      final count = await IAPService().restorePurchases();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(count > 0
+              ? '$count satın alma geri yüklendi'
+              : 'Geri yüklenecek satın alma bulunamadı'),
+          backgroundColor:
+              count > 0 ? AppColors.success : AppColors.warning,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Geri yükleme başarısız oldu'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   void _showReauthenticateDialog({required Function onSuccess}) {
     final TextEditingController passwordController = TextEditingController();
 
@@ -1451,17 +1271,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   }
 
   // Cinsiyet tercihlerini metin olarak göster
-  String _getGenderPreferencesText() {
-    if (genderPreferences.isEmpty) {
-      return 'Tercih seçilmemiş';
-    } else if (genderPreferences.length == 3) {
-      return 'Herkes';
-    } else if (genderPreferences.length == 2) {
-      return genderPreferences.join(' ve ');
-    } else {
-      return genderPreferences.first;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1515,36 +1324,12 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                 ),
               ),
 
-            // BAĞLANTI TERCİHLERİ
-            _buildSection(
-              title: 'Bağlantı Tercihleri',
-              icon: Icons.people,
-              color: AppColors.primary,
-              children: [
-                _buildListTile(
-                  title: 'Cinsiyet Tercihleri',
-                  subtitle:
-                      'Kimleri görmek istiyorsun: ${_getGenderPreferencesText()}',
-                  trailing: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _getGenderPreferencesText(),
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  onTap: _showGenderPreferencesDialog,
-                ),
-              ],
-            ),
+            // "Bağlantı Tercihleri > Cinsiyet Tercihleri" bölümü KALDIRILDI.
+            // Bu ayar hiçbir sorguda kullanılmıyordu: yazılıyor, geri okunup
+            // yalnızca kendi etiketini çizmek için gösteriliyordu. Buna karşılık
+            // ayarların en üstünde duran, "Keşfet sayfasında hangi cinsiyetteki
+            // kullanıcıları görmek istersin?" diyen bir dating tercih seçicisiydi —
+            // Guideline 4.3(b) incelemesinde uygulamadaki en belirgin dating izi.
 
             // Görünürlük Ayarları
             _buildSection(
@@ -1562,9 +1347,23 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                     _saveSettings();
                   },
                 ),
+                // Arkadaşlık katmanı, kapının bilinçli istisnasıdır:
+                // arkadaşın hareketini o mekana gitmemiş olsan da görürsün.
+                // Bu yüzden kullanıcı bunu kapatabilmeli.
+                _buildSwitchTile(
+                  title: 'Arkadaşlarım hareketimi görsün',
+                  subtitle: "Check-in'lerin arkadaşlarının Bugün akışında görünür",
+                  value: shareActivityWithFriends,
+                  onChanged: (value) {
+                    setState(() {
+                      shareActivityWithFriends = value;
+                    });
+                    _saveSettings();
+                  },
+                ),
                 _buildSwitchTile(
                   title: 'Profil Aktif',
-                  subtitle: 'Profilin keşfette görünsün',
+                  subtitle: 'Profilin mekan listelerinde görünsün',
                   value: profileActive,
                   onChanged: (value) {
                     setState(() {
@@ -1633,6 +1432,15 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   subtitle: userData?['email'] ?? 'Email eklenmemiş',
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: _showChangeEmailDialog,
+                ),
+                // App Store Guideline 3.1.1: geri yükleme BULUNABİLİR olmalı.
+                // Eskiden yalnızca premium satın alma sayfasının içindeydi;
+                // aboneliği olan ama sayfayı açmayan kullanıcı bulamıyordu.
+                _buildListTile(
+                  title: 'Satın Alımları Geri Yükle',
+                  subtitle: 'Önceki aboneliğini bu cihaza geri yükle',
+                  trailing: const Icon(Icons.restore, size: 20),
+                  onTap: _restorePurchases,
                 ),
                 _buildListTile(
                   title: 'Şifre Değiştir',
@@ -1783,7 +1591,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                           TextButton(
                             onPressed: () async {
                               // Auto-login verilerini temizle
-                              final autoLoginService = AutoLoginService();
+                              // Eskiden AutoLoginService kullanılıyordu; o yalnızca _v2 anahtarlarını
+                              // temizliyor, canlı _v3 anahtarlarına dokunmuyordu — bu yüzden
+                              // çıkış yapan kullanıcı bir sonraki açılışta geri giriş yapıyordu.
+                              final autoLoginService = NativeAutoLoginService();
                               await autoLoginService.handleLogout();
 
                               // Firebase'den çıkış yap
@@ -2620,216 +2431,12 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   }
 
   String _getPrivacyPolicyContent() {
-    return '''
-LOVENME GİZLİLİK POLİTİKASI
-Son Güncelleme Tarihi: 19.12.2025
-
-Bu Gizlilik Politikası, Lovenme mobil uygulamasının ("Uygulama") kullanımı sırasında işlenen kişisel verilere ilişkin olarak kullanıcıları bilgilendirmek amacıyla hazırlanmıştır.
-
-Lovenme, kişisel verilerinizi yürürlükteki mevzuata uygun olarak; başta 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) olmak üzere ilgili düzenlemelere uygun şekilde işler.
-
-1. Veri Sorumlusu
-Unvan: Noesis Social
-Yetkili: Burak Ohrili
-Adres: Gazi Osman Paşa Mah. 5499/1 Sokak No:9 D:2 Bornova / İzmir / Türkiye
-E-posta: support@lovenme.app
-
-2. İşlenen Kişisel Veriler
-Uygulama kapsamında aşağıdaki kişisel veriler işlenmektedir:
-
-2.1. Kimlik ve İletişim Bilgileri
-• Görünen ad (profil adı)
-• E-posta adresi
-• Telefon numarası
-
-Bu veriler, kullanıcı hesabının oluşturulması, doğrulanması ve güvenliğinin sağlanması amacıyla işlenir.
-
-2.2. Kullanıcı İçerikleri
-• Profil fotoğrafları
-• Mesajlaşma (DM) içerikleri
-• Check-in paylaşımları ve açıklamaları
-
-Mesaj içerikleri yalnızca hizmetin sunulması amacıyla saklanır ve üçüncü kişilerle paylaşılmaz.
-
-2.3. Konum Bilgisi
-• Kesin konum bilgisi (precise location)
-
-Konum bilgisi yalnızca:
-• Yakındaki mekânları göstermek,
-• Check-in yapılmasını sağlamak,
-• Son 24 saatlik check-in'leri görüntülemek
-
-amaçlarıyla, kullanıcının açık izniyle işlenir.
-Uygulama, arka planda sürekli konum takibi yapmaz.
-
-2.4. Kullanım ve Teknik Veriler
-• Kullanıcı kimliği (User ID)
-• Uygulama içi etkileşimler (bağlantı isteği, mesajlaşma, check-in)
-• Hata ve çökme kayıtları (varsa)
-
-Bu veriler, uygulamanın güvenli ve düzgün çalışmasını sağlamak amacıyla kullanılır.
-
-2.5. Satın Alma Bilgileri
-• Abonelik ve satın alma durumu
-
-Ödeme kartı veya banka bilgileri Lovenme tarafından toplanmaz veya saklanmaz. Tüm ödeme işlemleri ilgili uygulama mağazaları (Apple App Store vb.) üzerinden gerçekleştirilir.
-
-3. Kişisel Verilerin Toplanma Yöntemi
-Kişisel veriler;
-• Kullanıcı tarafından doğrudan sağlanan bilgiler,
-• Uygulama kullanımı sırasında otomatik olarak oluşan veriler,
-• Kimlik doğrulama ve bildirim hizmetleri aracılığıyla
-toplanmaktadır.
-
-4. Kişisel Verilerin İşlenme Amaçları
-Kişisel veriler aşağıdaki amaçlarla işlenmektedir:
-• Kullanıcı hesabının oluşturulması ve yönetilmesi
-• Mesajlaşma, mekan bağlantısı ve check-in hizmetlerinin sunulması
-• Yakındaki mekânların ve kullanıcıların gösterilmesi
-• Güvenlik, sahtecilik ve kötüye kullanımın önlenmesi
-• Uygulamanın teknik olarak sorunsuz çalışmasının sağlanması
-• Yasal yükümlülüklerin yerine getirilmesi
-
-5. Üçüncü Taraf Hizmet Sağlayıcılar
-Uygulama kapsamında aşağıdaki hizmet sağlayıcılardan yararlanılmaktadır:
-• Google Firebase (Authentication, Firestore, Cloud Messaging)
-• NETGSM Telekomünikasyon A.Ş. (SMS doğrulama hizmetleri)
-
-Bu hizmet sağlayıcılar, kişisel verileri yalnızca ilgili hizmeti sunmak amacıyla ve gizlilik yükümlülükleri çerçevesinde işler.
-
-6. Reklam, Pazarlama ve Takip
-Lovenme uygulamasında:
-• Üçüncü taraf reklam hizmetleri,
-• Kişiselleştirilmiş reklam,
-• Pazarlama veya yeniden hedefleme,
-• Uygulamalar arası kullanıcı takibi
-bulunmamaktadır.
-
-Kişisel veriler, reklam veya pazarlama amacıyla kullanılmaz ve paylaşılmaz.
-
-7. Kişisel Verilerin Saklama Süresi
-Kişisel veriler:
-• Kullanıcı hesabı aktif olduğu sürece,
-• Hesap silme talebi sonrasında ise yasal yükümlülükler saklı kalmak kaydıyla
-makul süre boyunca saklanır ve ardından silinir veya anonim hale getirilir.
-
-8. Kullanıcı Hakları
-KVKK ve GDPR kapsamında kullanıcılar:
-• Kişisel verilerine erişme,
-• Düzeltme talep etme,
-• Silme veya yok edilmesini isteme,
-• Veri işlemeye itiraz etme,
-• Açık rızayı geri çekme
-haklarına sahiptir.
-
-Bu haklara ilişkin talepler support@lovenme.app adresi üzerinden iletilebilir.
-
-9. Hesap Silme
-Kullanıcılar, uygulama içindeki ilgili ayarlar aracılığıyla:
-• Hesaplarını geçici olarak dondurabilir,
-• Hesaplarını kalıcı olarak silebilir.
-
-Hesap silme işlemi sonrası kişisel veriler, yasal zorunluluklar dışında sistemlerden kaldırılır.
-
-10. Çocukların Gizliliği
-Lovenme, 18 yaşından küçük kullanıcılara yönelik değildir. Reşit olmayan kullanıcılara ait hesaplar tespit edilmesi halinde silinir.
-
-11. Güvenlik
-Lovenme, kişisel verilerin gizliliğini ve güvenliğini sağlamak amacıyla teknik ve idari güvenlik önlemleri uygular. Ancak internet üzerinden yapılan veri iletimlerinin %100 güvenli olduğu garanti edilemez.
-
-12. Politika Değişiklikleri
-Bu Gizlilik Politikası zaman zaman güncellenebilir. Önemli değişiklikler uygulama içinden veya uygun iletişim kanallarıyla kullanıcılara bildirilir.
-
-13. İletişim
-Gizlilik politikası ve kişisel verilerle ilgili her türlü soru ve talep için:
-📧 support@lovenme.app
-''';
+    // Metin artik tek kaynakta: lib/core/legal/legal_documents.dart
+    return LegalDocuments.privacyPolicy;
   }
 
   String _getTermsOfServiceContent() {
-    return '''
-LOVENME KULLANIM ŞARTLARI (HİZMET KOŞULLARI)
-
-Yürürlük Tarihi: 21.09.2025
-Son Güncelleme: 21.09.2025
-Hizmet Sağlayıcı (Veri Sorumlusu): Burak Ohrili
-Adres: Gazi Osman Paşa Mahallesi 5499/1 Sokak No:9 Kat:1 Bornova / İzmir
-MERSİS / Ticaret Sicil No: TC 35509755908
-Vergi Dairesi ve No: EGE VD 6360302767
-lovenmeapp@gmail.com
-
-Barındırma/Hizmet Altyapısı: Apple App Store, Google Play, Google Ads/AdMob, Google Cloud/Firebase, Google Maps API, Resend Mail, Google Workspace, NetGSM
-
-Bu Kullanım Şartları ("Şartlar"), Lovenme mobil uygulaması ve ilgili web/servisleri (hep birlikte "Hizmet") kullanımınıza ilişkin yasal sözleşmeyi oluşturur. Hizmeti indirerek, hesap oluşturarak veya kullanarak bu Şartlar ile Gizlilik Politikası ve Çerez/İzleme Teknolojileri Politikasını kabul etmiş sayılırsınız. Şartları kabul etmiyorsanız Hizmeti kullanmayınız.
-
-1. Tanımlar
-Lovenme / Biz: Burak Ohrili.
-Kullanıcı / Siz: 18 yaşını doldurmuş, Hizmeti kullanan gerçek kişi.
-Hesap: Uygulamada oluşturduğunuz üyelik profili.
-Premium: Ücretli abonelik paketi/leri.
-Sanal Ürünler: Uygulama içinde satılan Super Like, Elmas vb. dijital hak/öğe.
-İçerik: Profil fotoğrafı, yazı, ses kaydı, video, mesajlar ve diğer kullanıcı paylaşımları.
-Üçüncü Taraflar: Apple App Store, Google Play, Google Ads/AdMob, Google Cloud/Firebase, Google Maps API, Resend Mail, Google Workspace, NetGSM vb. hizmet sağlayıcılar.
-
-2. Uygunluk ve Hesap
-2.1. Yaş Sınırı: Hizmet yalnızca 18+ içindir. 18 yaş altı kullanım kesinlikle yasaktır.
-2.2. Kayıt: Hesap; telefon numarası/e-posta/Apple-Google girişi ile oluşturulabilir. Verdiğiniz tüm bilgilerin doğru, güncel ve size ait olduğunu beyan edersiniz.
-2.3. Tek Hesap: Her kullanıcı sadece 1 (bir) hesap oluşturabilir; hesabınızı devredemez, kiralayamaz, satamazsınız.
-2.4. Güvenlik: Giriş bilgilerinizi gizli tutmakla yükümlüsünüz. Hesabınızın yetkisiz kullanımından doğan sonuçlardan siz sorumlusunuz.
-2.5. Kimlik/Doğrulama: Güvenlik amacıyla gerektiğinde ek doğrulama (ör. SMS doğrulama, fotoğraf/yüz doğrulama) talep edebiliriz; sağlamazsanız hesabınız askıya alınabilir.
-
-3. Hizmetin Kapsamı ve Özellikler
-3.1. Lovenme; mekân/check-in temelli keşif ve bağlantı mantığıyla kullanıcıları ortak mekanlarda buluşturan bir sosyal keşif uygulamasıdır.
-3.2. Bazı özellikler ücretsiz; bazıları Premium abonelik veya Sanal Ürün satın alımı ile sunulur.
-3.3. Konum: Çalışma, favori/ziyaret ettiğiniz check-in yaptığınız mekânlara göre öneriler üretilmesine dayanır. Uygulama, cihazınızın konum izinlerine dayalı yaklaşık/kesin konum verilerini yalnızca açık rızanızla işler.
-3.4. Mesajlaşma: Karşılıklı bağlantı isteği kabul edildikten sonra iletişim kurulabilir. Mesaj ve ses notları, iletimi sağlamak ve güvenlik/şikâyet süreçleri için makul süreyle saklanabilir.
-
-4. Davranış Kuralları (Topluluk İlkeleri)
-4.1. Saygı ve Doğruluk: Profilinizde gerçek sizi yansıtan bir yüz fotoğrafı bulundurmalı; başkasını taklit etmemeli, sahte/AI üretimi aldatıcı görseller kullanmamalısınız.
-4.2. Yasak İçerik ve Eylemler:
-a) Hukuka aykırı, tehditkâr, hakaret/iftira, müstehcen, cinsel istismar içeren, nefret/ayrımcılık barındıran içerikler;
-b) Şiddet, intihar/öz zarar teşviki;
-c) Başkasının kişisel verisini/özel hayatını izinsiz ifşa;
-d) Fikri mülkiyet ihlali (foto/video/müzik vs. izinsiz paylaşım);
-e) Spam, dolandırıcılık, "catfishing", kimlik avı;
-f) Seks işçiliği/escortluk, narkotik/illegal ürün/servis teşviki;
-g) Otomatik araç/bot/scraper, tersine mühendislik, güvenlik zafiyeti istismarı;
-h) Reklam/ticari tanıtım, platform dışına yönlendirme ve veri kazıma;
-i) 18 yaş altı bireylerle herhangi bir cinsel içerik/temas veya reşit olmayanların cinselleştirilmesine yönelik her türlü paylaşım.
-
-4.3. Raporlama/Engelleme: Uygunsuz davranış veya güvenlik endişenizde bildir ve/veya engelle araçlarını kullanın.
-4.4. Offline Görüşmeler: Tanışmalarınız ve fiziksel buluşmalarınız tamamen kendi sorumluluğunuzdadır. İlk buluşmaları kamusal alanda yapmanızı, yakınınıza bilgi vermenizi öneririz.
-
-5. Moderasyon, Askıya Alma ve Fesih
-5.1. Şartlara aykırılık, güvenlik riski, sahte profil şüphesi, yargı mercilerinden gelen talepler veya uzun süreli inaktivite hâlinde hesabı uyarma/özellik kısıtlama/askıya alma veya feshetme hakkımız saklıdır.
-5.2. Ağır ihlallerde derhal ve süresiz yasak uygulanabilir.
-5.3. Sizin fesih hakkınız: Hesabınızı dilediğiniz an "Ayarlar > Hesabımı Sil" üzerinden kalıcı olarak silebilirsiniz.
-
-6. Premium Abonelikler
-6.1. Premium; sınırsız chat isteği, check-in yapanların profillerini görme, check-in yapmadan kişileri görebilme, Süper Chat hakları vb. avantajlar içerebilir.
-6.2. Satın Alma ve Faturalama: Mobil abonelikler; Apple App Store / Google Play üzerinden, ilgili platformun kullanım/ödeme şartlarına tabi olarak tahsil edilir.
-6.3. Otomatik Yenileme: Premium, aksi belirtilmedikçe otomatik yenilenir. İptal etmek için dönem bitiminden en az 24 saat önce App Store/Google Play üzerinden abonelik yenilemeyi kapatınız.
-
-7. Sanal Ürünler: Süper Chat ve Elmas
-7.1. Süper Chat, Elmas vb. sanal ürünler yalnızca uygulama içi kullanım amaçlı, parasal karşılığı olmayan dijital değerlerdir.
-7.2. Sanal ürün alımları kesindir, iade edilemez; nakde çevrilemez, devredilemez.
-
-8. Fikri Mülkiyet
-8.1. Lovenme ve logoları, tasarım, yazılım, veri tabanı dahil tüm unsurların mali/sınai hakları Burak Ohrili'ye aittir.
-8.2. Kullanıcı İçerikleri: İçeriklerin sahibi sizsiniz; Hizmeti sağlamak/geliştirmek amacıyla dünya çapında, münhasır olmayan, bedelsiz kullanım lisansı sağlarsınız.
-
-9. Sorumluluk Reddi ve Sınırlamalar
-9.1. Hizmet "olduğu gibi" sunulur; kesintisiz, hatasız çalışacağına dair garanti verilmez.
-9.2. Kullanıcı davranışlarından (çevrimiçi/çevrimdışı etkileşimler) doğacak zararlardan sorumluluk kabul edilmez.
-
-10. Uyuşmazlık Çözümü
-10.1. Öncelikle lovenmeapp@gmail.com üzerinden bize ulaşarak uyuşmazlıklara dostane çözüm arayınız.
-10.2. Uygulanacak hukuk: Türkiye Cumhuriyeti Hukuku.
-
-11. İletişim
-Burak Ohrili
-Adres: Gazi Osman Paşa Mahallesi 5499/1 Sokak No:9 Kat:1 Bornova / İzmir
-E-posta: lovenmeapp@gmail.com
-''';
+    // Metin artik tek kaynakta: lib/core/legal/legal_documents.dart
+    return LegalDocuments.termsOfService;
   }
 }

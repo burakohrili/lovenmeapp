@@ -51,14 +51,9 @@
 	<!-- FIREBASE URL SCHEMES FOR PHONE AUTH -->
 	<key>CFBundleURLTypes</key>
 	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.lovenme.app</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.1056918584333-75c4h7a43b6dkq96c56b6g4hjdu12s13</string>
-			</array>
-		</dict>
+		<!-- Google Sign-In URL semasi KALDIRILDI: uygulamada Google ile giris
+		     ozelligi yok (google_sign_in paketi hic kullanilmiyor). Kullanilmayan
+		     URL semasi inceleme sorusu doguruyordu. -->
 		<dict>
 			<key>CFBundleURLName</key>
 			<string>com.lovenme.app.settings</string>
@@ -81,16 +76,14 @@
 
 	
 	
-	<!-- iOS 14+ için hassas konum izni -->
-	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
-	<dict>
-		<key>MapLocation</key>
-		<string>Haritada konumunuzu göstermek için gerekli</string>
-	</dict>
+	<!-- NSLocationTemporaryUsageDescriptionDictionary KALDIRILDI:
+	     requestTemporaryFullAccuracy hicbir yerde cagrilmiyor. -->
 	
+	<!-- `fetch` KALDIRILDI: AppDelegate'te arka plan getirme uygulamasi yok
+	     (BGTaskScheduler / performFetchWithCompletionHandler yok). Karsiligi
+	     olmayan arka plan modu bildirmek belgelenmis bir ret sebebi. -->
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
 
@@ -98,19 +91,27 @@
 	<key>NSCameraUsageDescription</key>
 	<string>LoveNMe, profil fotoğrafı çekmek ve mekanlardaki check-in'lerde fotoğraf paylaşmak için kamerayı kullanır.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>LoveNMe needs access to your photo library to select existing photos for your profile. You can choose which photos to share from your gallery.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>LoveNMe saves photos you take within the app to your photo library so you can access them later and share them on other platforms.</string>
+	<string>LoveNMe, profil fotoğrafını seçebilmen için galerine erişir. Hangi fotoğrafı paylaşacağına sen karar verirsin.</string>
+	<!-- NSPhotoLibraryAddUsageDescription KALDIRILDI: uygulama galeriye
+	     HICBIR SEY yazmiyor; metin de yanlisti. -->
 	
-	<!-- Microphone for video recording - ZORUNLU -->
+	<!-- Mikrofon: sesli mesaj icin. Eski metin "video kaydederken" diyordu;
+	     uygulamada video kaydi yok, sohbette sesli mesaj var. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>LoveNMe may access the microphone when recording videos to include audio in your shared content.</string>
+	<string>LoveNMe, sohbette sesli mesaj kaydedebilmen için mikrofonu kullanır.</string>
 	
 	<!-- iOS 14+ için Photo Library Limited Access -->
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>
 	
 	<!-- App Category -->
+	<!-- Uygulama metinleri Turkce; bu bildirilmeyince Flutter'in kendi
+	     cerceve metinleri (Kes/Kopyala/Yapistir, tarih secici, "Back")
+	     Ingilizce geliyordu. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>tr</string>
+	</array>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.social-networking</string>
 

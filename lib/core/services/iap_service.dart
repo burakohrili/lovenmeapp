@@ -71,12 +71,15 @@ class IAPService {
           'description': 'Sınırsız chat isteği, özel özellikler',
           'price': 95.99,
           'duration': '7 gün',
+          // Gerçek fayda listesi — bkz. premium_models.dart notu.
+          // Gerçek fayda listesi — bkz. premium_models.dart notu.
+          // Gerçek fayda listesi — bkz. premium_models.dart notu.
           'features': [
-            'Sınırsız chat isteği',
-            'Check-in yapanların profillerini gör',
-            'Check-in yapmadan kişileri görebilme',
-            'Geçmiş check-in\'leri görüntüle',
-            '3 Süper Chat hakkı (Tek seferlik)'
+            'Sınırsız bağlantı isteği',
+            'Tüm check-in geçmişin ve mekan istatistiklerin',
+            'Karşılaşma geçmişi',
+            'Seri koruması',
+            '30 Öne Çıkan Mesaj hakkı (Tek seferlik)'
           ],
         },
         'premium_monthly': {
@@ -85,11 +88,11 @@ class IAPService {
           'price': 359.99,
           'duration': '30 gün',
           'features': [
-            'Sınırsız chat isteği',
-            'Check-in yapanların profillerini gör',
-            'Check-in yapmadan kişileri görebilme',
-            'Geçmiş check-in\'leri görüntüle',
-            '10 Süper Chat hakkı (Tek seferlik)'
+            'Sınırsız bağlantı isteği',
+            'Tüm check-in geçmişin ve mekan istatistiklerin',
+            'Karşılaşma geçmişi',
+            'Seri koruması',
+            '10 Öne Çıkan Mesaj hakkı (Tek seferlik)'
           ],
         },
         'premium_quarterly': {
@@ -98,11 +101,11 @@ class IAPService {
           'price': 719.99,
           'duration': '90 gün',
           'features': [
-            'Sınırsız chat isteği',
-            'Check-in yapanların profillerini gör',
-            'Check-in yapmadan kişileri görebilme',
-            'Geçmiş check-in\'leri görüntüle',
-            '30 Süper Chat hakkı (Tek seferlik)'
+            'Sınırsız bağlantı isteği',
+            'Tüm check-in geçmişin ve mekan istatistiklerin',
+            'Karşılaşma geçmişi',
+            'Seri koruması',
+            '30 Öne Çıkan Mesaj hakkı (Tek seferlik)'
           ],
         },
 
@@ -560,8 +563,11 @@ class IAPService {
     try {
       final token = purchaseDetails.verificationData.serverVerificationData;
       if (token.isEmpty) {
-        debugPrint('⚠️ serverVerificationData boş, doğrulama atlanıyor');
-        return true; // Token yoksa geç (test ortamı gibi durumlar)
+        // Eskiden burada `return true` vardi: dogrulama jetonu olmayan bir
+        // satin alma DOGRULANMIS sayiliyordu. Bu, sunucu tarafli dogrulamayi
+        // tamamen atlatmanin yoluydu.
+        debugPrint('serverVerificationData bos — dogrulama BASARISIZ');
+        return false;
       }
 
       final purchaseType = purchaseDetails.productID.contains('premium')
@@ -1031,7 +1037,12 @@ class IAPService {
       'premiumUntil': Timestamp.fromDate(expiryDate),
       'dailyChatRequestsRemaining': 999, // Sınırsız chat request
       'superChatsRemaining': FieldValue.increment(
-          superChatCount), // 💬 Süper Chat hakkı (tek seferlik)
+          superChatCount), // Öne çıkan mesaj hakkı (tek seferlik)
+      // SERİ KORUMASI: Premium fayda listesinde vaat ediliyor ama kodu hiç
+      // çağrılmıyordu (GamificationService.grantStreakFreeze sıfır çağrı).
+      // Tek kişilik, adil ve P2W olmayan bir fayda: bir günü kaçırsan bile
+      // serin bozulmaz. Abonelik süresine göre stok verilir.
+      'streakFreezes': FieldValue.increment(days ~/ 7),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -1153,9 +1164,11 @@ class IAPService {
       } catch (_) {}
       // Hâlâ pending ise sert sıfırla (Google Play'den cevap gelmedi demektir)
       if (_purchasePending) {
-        _purchasePending = false;
-        _isPurchaseInProgress = false;
-        debugPrint('[IAP] Force-reset pending state after failed auto-clear');
+        // ZORLA SIFIRLAMA KALDIRILDI: bekleyen bir islem "beklemiyor"
+        // isaretlenince kullanici tekrar satin alabiliyor ve CIFT
+        // UCRETLENDIRME riski doguyordu. Artik kullaniciya durum bildirilir.
+        debugPrint('[IAP] Bekleyen islem hala acik — yeni satin alma engellendi');
+        return false;
       }
     }
 
@@ -1318,9 +1331,6 @@ class IAPService {
       final isPremium = data['isPremium'];
       final premiumType = data['premiumType'];
       final premiumUntil = data['premiumUntil'];
-      final purchasedSuperLikes = data['purchasedSuperLikes'];
-      final dailyLikesRemaining = data['dailyLikesRemaining'];
-      final rewindsRemaining = data['rewindsRemaining'];
       final balance = data['diamonds'] ?? 0;
 
       if (premiumUntil is Timestamp) {}

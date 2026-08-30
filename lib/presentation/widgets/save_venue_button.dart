@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/services/saved_venues_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/analytics_service.dart';
 
 /// "Gitmek İstiyorum" butonu.
 ///
@@ -78,6 +79,7 @@ class _SaveVenueButtonState extends State<SaveVenueButton> {
             longitude: widget.longitude,
             vicinity: widget.vicinity,
           );
+      AnalyticsService.savedVenueAdded(widget.venueId);
 
     if (!mounted) return;
     setState(() {

@@ -10,6 +10,7 @@ import 'register_page.dart';
 import '../onboarding/profile_setup_step1_page.dart';
 import '../../widgets/auth/forgot_password_bottom_sheet.dart';
 import '../../widgets/common/app_logo_widget.dart';
+import '../../../core/utils/onboarding_router.dart';
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -116,11 +117,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
               );
               
+              // KALDIĞI ADIMDAN devam ettir. Eskiden burada koşulsuz
+              // ProfileSetupStep1Page açılıyordu: Adım 6'da (SMS) takılan
+              // kullanıcı, tekrar giriş yaptığında yedi ekranı baştan
+              // yürümek zorunda kalıyordu.
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const ProfileSetupStep1Page(),
-                  settings: const RouteSettings(name: '/profile-setup-step1'),
+                  builder: (context) =>
+                      OnboardingRouter.resumePage(userData),
                 ),
                 (route) => false,
               );
@@ -247,9 +252,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       'isProfileComplete': false,
       'isActive': true,
       'isPremium': false,
-      'dailyLikesRemaining': 5,
-      'superLikesRemaining': 0,
-      'dailyRewindsRemaining': 0,
     });
     
     // Provider'a email'i kaydet

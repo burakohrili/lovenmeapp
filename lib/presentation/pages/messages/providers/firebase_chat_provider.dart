@@ -15,6 +15,9 @@ class FirebaseChatNotifier extends StateNotifier<ChatState> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   StreamSubscription<QuerySnapshot>? _matchesSubscription;
+  StreamSubscription<QuerySnapshot>? _matchesSideTwoSubscription;
+  final Map<String, Map<String, dynamic>> _matchDocsAsUser1 = {};
+  final Map<String, Map<String, dynamic>> _matchDocsAsUser2 = {};
   StreamSubscription<User?>? _authSubscription;
   final Map<String, StreamSubscription<QuerySnapshot>> _messageSubscriptions = {};
 
@@ -57,6 +60,10 @@ class FirebaseChatNotifier extends StateNotifier<ChatState> {
   void _cancelAllSubscriptions() {
     _matchesSubscription?.cancel();
     _matchesSubscription = null;
+    _matchesSideTwoSubscription?.cancel();
+    _matchesSideTwoSubscription = null;
+    _matchDocsAsUser1.clear();
+    _matchDocsAsUser2.clear();
     
     for (var sub in _messageSubscriptions.values) {
       sub.cancel();
@@ -64,134 +71,137 @@ class FirebaseChatNotifier extends StateNotifier<ChatState> {
     _messageSubscriptions.clear();
   }
 
+  /// Kullanıcının bağlantılarını dinler.
+  ///
+  /// GÜVENLİK + MALİYET: Eskiden burada `where('isActive', isEqualTo: true)`
+  /// ile TÜM koleksiyon dinleniyor, eşleşmeyenler Dart tarafında eleniyordu.
+  /// Yani her cihaz uygulamadaki bütün bağlantı grafiğini indiriyordu — hem
+  /// veri sızıntısı hem faturanın en büyük kalemi. Firestore'da OR sorgusu
+  /// olmadığı için iki ayrı taraf sorgusu açıp sonuçları birleştiriyoruz.
   void _listenToMatches() {
     final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
 
-    if (userId == null) {
-      return;
-    }
-
-    // Önceki subscription'ı iptal et
     _matchesSubscription?.cancel();
+    _matchesSideTwoSubscription?.cancel();
+    _matchDocsAsUser1.clear();
+    _matchDocsAsUser2.clear();
 
-    // Yeni subscription başlat
     _matchesSubscription = _firestore
         .collection('matches')
         .where('isActive', isEqualTo: true)
+        .where('user1Id', isEqualTo: userId)
         .snapshots()
-        .listen((snapshot) async {
-      
+        .listen((snapshot) {
+      _matchDocsAsUser1
+        ..clear()
+        ..addEntries(snapshot.docs.map((d) => MapEntry(d.id, d.data())));
+      _rebuildMatches(userId);
+    }, onError: (_) {});
 
-      List<MatchModel> matches = [];
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        
-        // Her seferinde güncel userId'yi kontrol et
-        final currentUserId = _auth.currentUser?.uid;
-        if (currentUserId == null || currentUserId != userId) {
-          return;
-        }
-        
-
-        if (data['isActive'] != true) {
-          continue;
-        }
-
-        String otherUserId = '';
-
-        if (data['user1Id'] == currentUserId) {
-          otherUserId = data['user2Id'];
-        } else if (data['user2Id'] == currentUserId) {
-          otherUserId = data['user1Id'];
-        } else {
-          continue;
-        }
-
-        try {
-          final userDoc = await _firestore
-              .collection('users')
-              .doc(otherUserId)
-              .get();
-
-          if (!userDoc.exists) {
-            continue;
-          }
-
-          final userData = userDoc.data()!;
-
-          final matchedAtData = data['matchedAt'];
-          DateTime matchedAt;
-          if (matchedAtData is Timestamp) {
-            matchedAt = matchedAtData.toDate();
-          } else {
-            matchedAt = DateTime.now();
-          }
-
-          DateTime? lastMessageTime;
-          if (data['lastMessageTime'] != null &&
-              data['lastMessageTime'] is Timestamp) {
-            lastMessageTime = (data['lastMessageTime'] as Timestamp).toDate();
-          }
-
-          final match = MatchModel(
-            id: doc.id,
-            userId: otherUserId,
-            name: userData['name'] ?? 'İsimsiz',
-            age: userData['age'] ?? 18,
-            profileImage: userData['photos']?.isNotEmpty == true
-                ? userData['photos'][0]
-                : 'https://via.placeholder.com/150',
-            photos: List<String>.from(
-                userData['photos'] ?? ['https://via.placeholder.com/150']),
-            matchedAt: matchedAt,
-            lastMessage: data['lastMessage'] ?? '',
-            lastMessageTime: lastMessageTime,
-            unreadCount: 0,
-            isOnline: userData['isOnline'] ?? false,
-            lastSeen: userData['lastSeen']?.toString(),
-            commonHobbies: [],
-            isPremium: userData['isPremium'] ?? false,
-          );
-
-          // Gerçek ortak check-in sayısını al
-          int commonCheckIns = 0;
-          List<String> commonVenueNames = [];
-          try {
-            final encounter = await EncounterService.getTopEncounter(currentUserId, otherUserId);
-            if (encounter != null) {
-              commonCheckIns = encounter.encounterCount;
-              commonVenueNames = [encounter.venueName];
-            }
-          } catch (_) {}
-
-          final matchWithVenues = match.copyWith(
-            commonCheckIns: commonCheckIns,
-            commonVenues: commonVenueNames,
-          );
-
-          matches.add(matchWithVenues);
-
-          // Her match için mesajları dinle
-          _listenToMessages(doc.id);
-        } catch (e) {
-        }
-      }
-
-      
-      // State'i güncelle - currentUserId'yi de kontrol et
-      final finalUserId = _auth.currentUser?.uid;
-      if (finalUserId != null && finalUserId == userId) {
-        state = state.copyWith(
-          matches: matches,
-          currentUserId: finalUserId,
-        );
-      }
-      
-    }, onError: (error) {
-    });
+    _matchesSideTwoSubscription = _firestore
+        .collection('matches')
+        .where('isActive', isEqualTo: true)
+        .where('user2Id', isEqualTo: userId)
+        .snapshots()
+        .listen((snapshot) {
+      _matchDocsAsUser2
+        ..clear()
+        ..addEntries(snapshot.docs.map((d) => MapEntry(d.id, d.data())));
+      _rebuildMatches(userId);
+    }, onError: (_) {});
   }
 
+  /// İki taraftan gelen dokümanları birleştirip state'i kurar.
+  Future<void> _rebuildMatches(String userId) async {
+    final merged = <String, Map<String, dynamic>>{}
+      ..addAll(_matchDocsAsUser1)
+      ..addAll(_matchDocsAsUser2);
+
+    final List<MatchModel> matches = [];
+
+    for (final entry in merged.entries) {
+      final docId = entry.key;
+      final data = entry.value;
+
+      final currentUserId = _auth.currentUser?.uid;
+      if (currentUserId == null || currentUserId != userId) return;
+
+      if (data['isActive'] != true) continue;
+
+      String otherUserId = '';
+      if (data['user1Id'] == currentUserId) {
+        otherUserId = (data['user2Id'] ?? '').toString();
+      } else if (data['user2Id'] == currentUserId) {
+        otherUserId = (data['user1Id'] ?? '').toString();
+      } else {
+        continue;
+      }
+      if (otherUserId.isEmpty) continue;
+
+      try {
+        final userDoc =
+            await _firestore.collection('users').doc(otherUserId).get();
+        if (!userDoc.exists) continue;
+
+        final userData = userDoc.data()!;
+
+        final matchedAtData = data['matchedAt'] ?? data['timestamp'];
+        final DateTime matchedAt = matchedAtData is Timestamp
+            ? matchedAtData.toDate()
+            : DateTime.now();
+
+        DateTime? lastMessageTime;
+        if (data['lastMessageTime'] is Timestamp) {
+          lastMessageTime = (data['lastMessageTime'] as Timestamp).toDate();
+        }
+
+        final photos = List<String>.from(userData['photos'] ?? const []);
+
+        final match = MatchModel(
+          id: docId,
+          userId: otherUserId,
+          name: userData['name'] ?? 'İsimsiz',
+          age: userData['age'] ?? 18,
+          profileImage: photos.isNotEmpty ? photos.first : '',
+          photos: photos,
+          matchedAt: matchedAt,
+          lastMessage: data['lastMessage'] ?? '',
+          lastMessageTime: lastMessageTime,
+          unreadCount: 0,
+          isOnline: userData['isOnline'] ?? false,
+          lastSeen: userData['lastSeen']?.toString(),
+          commonHobbies: const [],
+          isPremium: userData['isPremium'] ?? false,
+        );
+
+        int commonCheckIns = 0;
+        List<String> commonVenueNames = [];
+        try {
+          final encounter =
+              await EncounterService.getTopEncounter(currentUserId, otherUserId);
+          if (encounter != null) {
+            commonCheckIns = encounter.encounterCount;
+            commonVenueNames = [encounter.venueName];
+          }
+        } catch (_) {}
+
+        matches.add(match.copyWith(
+          commonCheckIns: commonCheckIns,
+          commonVenues: commonVenueNames,
+        ));
+
+        _listenToMessages(docId);
+      } catch (_) {
+        // Tek bir bağlantı hidrasyonu başarısız olursa listeyi bozmayalım.
+      }
+    }
+
+    final finalUserId = _auth.currentUser?.uid;
+    if (finalUserId != null && finalUserId == userId) {
+      state = state.copyWith(matches: matches, currentUserId: finalUserId);
+    }
+  }
   void _listenToMessages(String matchId) {
     
     _messageSubscriptions[matchId]?.cancel();

@@ -77,11 +77,18 @@ extension PremiumSubscriptionTypeExtension on PremiumSubscriptionType {
   }
 
   List<String> get features {
+    // GERÇEK FAYDA LİSTESİ (30.08.2026).
+    // Kaldırılan üç maddenin karşılığı YOKTU:
+    //  - 'Check-in yapmadan kişileri görebilme': mevcudiyet kapısıyla
+    //    kaldırıldı; premium bu kapıyı ATLAYAMAZ.
+    //  - 'Reklamsız deneyim': uygulamada hiç reklam yok.
+    //  - 'Mekanda daha görünür ol': boost diye bir ürün yok.
+    // Var olmayan özelliği satmak App Store 3.1.1 açısından yanlış beyandır.
     const baseFeatures = [
-      'Daha fazla bağlantı isteği',
-      'Check-in yapanların profillerini gör',
-      'Check-in yapmadan kişileri görebilme',
-      'Geçmiş check-in\'leri görüntüle',
+      'Sınırsız bağlantı isteği',
+      'Tüm check-in geçmişin ve mekan istatistiklerin',
+      'Karşılaşma geçmişi: kiminle hangi mekanda karşılaştın',
+      'Seri koruması: bir günü kaçırsan bile serin bozulmaz',
     ];
 
     switch (this) {

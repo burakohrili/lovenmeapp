@@ -29,13 +29,19 @@ workflows:
         script: xcode-project use-profiles
       - name: Get Flutter packages
         script: flutter pub get
+      # DOGRULAMA ADIMI: Bu is akislarinin HICBIRINDE analiz veya test
+      # yoktu; bozuk bir degisiklik dogrudan TestFlight/Play'e gidebiliyordu.
+      - name: Static analysis
+        script: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Install CocoaPods dependencies
         script: find . -name "Podfile" -execdir pod install \;
+      # NOT: --build-name artik verilmiyor. Eskiden sabit 1.1.0 yaziliyordu
+      # ve pubspec.yaml surumunden bagimsizdi; iOS ile Android surum
+      # numaralari birbirinden kopuyordu. Artik pubspec tek kaynak.
       - name: Build signed iOS IPA
         script: |
           BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") + 1))
           flutter build ipa --release \
-            --build-name=1.1.0 \
             --build-number=$BUILD_NUMBER \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
@@ -67,6 +73,10 @@ workflows:
           echo "$API_KEYS_DART_B64" | base64 --decode > lib/config/api_keys.dart
       - name: Get Flutter packages
         script: flutter pub get
+      # DOGRULAMA ADIMI: Bu is akislarinin HICBIRINDE analiz veya test
+      # yoktu; bozuk bir degisiklik dogrudan TestFlight/Play'e gidebiliyordu.
+      - name: Static analysis
+        script: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Build signed Android app bundle
         script: flutter build appbundle --release
     artifacts:
@@ -90,6 +100,10 @@ workflows:
           echo "$API_KEYS_DART_B64" | base64 --decode > lib/config/api_keys.dart
       - name: Get Flutter packages
         script: flutter pub get
+      # DOGRULAMA ADIMI: Bu is akislarinin HICBIRINDE analiz veya test
+      # yoktu; bozuk bir degisiklik dogrudan TestFlight/Play'e gidebiliyordu.
+      - name: Static analysis
+        script: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Build debug APK
         script: flutter build apk --debug
     artifacts:

@@ -17,6 +17,8 @@ import '../../../widgets/encounter_widget.dart';
 import '../../widgets/premium/premium_subscription_widget.dart';
 import '../../../widgets/chat_request_modal.dart';
 import '../safety/community_guidelines_page.dart';
+import '../../../core/services/block_service.dart';
+import '../../widgets/friend_common_venues_section.dart';
 
 class UserProfilePage extends StatefulWidget {
   final String userId;
@@ -765,6 +767,10 @@ class _UserProfilePageState extends State<UserProfilePage>
           // ALTINCI FOTOĞRAF
           if (_allPhotos.length > 5) _buildPhotoCard(_allPhotos[5], 5),
           
+          // ARKADAŞ METRİKLERİ: ilişkiyi demografiyle değil, birlikte
+          // bulunulan yerlerle anlatır. Yalnızca arkadaşlarda görünür.
+          FriendCommonVenuesSection(otherUserId: widget.userId),
+
           // ENCOUNTER WIDGET (eğer showActions true ise)
           if (widget.showActions) _buildEncounterWidget(),
           
@@ -2103,25 +2109,27 @@ class _UserProfilePageState extends State<UserProfilePage>
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) return;
 
-      await _firestore
-          .collection('users')
-          .doc(currentUser.uid)
-          .collection('blocked_users')
-          .doc(widget.userId)
-          .set({
-        'blockedAt': FieldValue.serverTimestamp(),
-      });
+      // Eskiden `users/{uid}/blocked_users` ALT KOLEKSİYONUNA yazılıyordu;
+      // o alt koleksiyonun Firestore kuralı hiç yoktu, yazma reddediliyor,
+      // hata boş catch'te yutuluyor ve kullanıcıya yine de "engellendi"
+      // deniyordu. Yani profilden engelleme HİÇ çalışmıyordu.
+      final ok = await BlockService.block(widget.userId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Kullanıcı engellendi'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Kullanıcı engellendi'
+              : 'Engelleme başarısız oldu, tekrar dene'),
+          backgroundColor: ok ? AppColors.error : AppColors.warning,
+        ),
+      );
+      if (ok) Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Engelleme başarısız oldu')),
+      );
     }
   }
 

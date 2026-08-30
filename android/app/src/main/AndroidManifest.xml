@@ -8,17 +8,18 @@
     
     <!-- Android 13+ için yeni medya izinleri -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- READ_MEDIA_VIDEO kaldirildi: uygulamada video secme/kaydetme yok. -->
     
     <!-- Eski Android sürümleri için -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     
     <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
-    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- Kaldirilanlar (kullanilmiyorlardi, inceleme sorusu doguruyorlardi):
+         RECEIVE_BOOT_COMPLETED — zamanlanmis yerel bildirim yok
+         USE_FINGERPRINT / USE_BIOMETRIC — biyometrik kimlik dogrulama yok
+                                           (local_auth paketi bile ekli degil) -->
     
     <!-- ✅ Google Play Billing Permission for In-App Purchases -->
     <uses-permission android:name="com.android.vending.BILLING" />
@@ -29,6 +30,18 @@
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config" >
 
+        <!-- GÜVENLİK NOTU (30.08.2026):
+             Bu anahtar APK içinde ZORUNLU olarak bulunur; gizlenemez.
+             Korunma yolu gizlemek değil KISITLAMAK:
+               1) Google Cloud Console > Credentials > bu anahtar >
+                  Application restrictions = Android apps
+                  (paket: com.lovenme.app + release SHA-1)
+               2) API restrictions = yalnızca Maps SDK for Android
+               3) Places REST çağrıları BU anahtarı KULLANMAMALI — REST'te
+                  uygulama kısıtlaması işlemez. Onlar sunucu kısıtlı ayrı bir
+                  anahtarla, kimlik doğrulamalı bir Cloud Function üzerinden
+                  yapılmalı.
+             Mevcut anahtar git geçmişinde olduğu için DÖNDÜRÜLMELİ. -->
         <meta-data 
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCj4GNRHo2-ofM33k8Av3Zap1h5UGkVhk4"/>

@@ -17,6 +17,7 @@ import 'models/match_model.dart';
 import 'models/message_model.dart';
 import 'providers/firebase_chat_provider.dart';
 import '../profile/user_profile_page.dart';
+import '../../../core/services/block_service.dart';
 
 class ChatDetailPage extends ConsumerStatefulWidget {
   final MatchModel match;
@@ -464,7 +465,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${widget.match.name}, ${widget.match.age}',
+                      // Yas kaldirildi: sohbet basligi kisiyi demografiyle
+                      // degil adiyla tanimlar.
+                      widget.match.name,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -1072,10 +1075,26 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             child: const Text('İptal'),
           ),
           TextButton(
-            onPressed: () {
+            // Eskiden bu buton SADECE konuşmayı siliyordu; hiçbir engelleme
+            // kaydı yazılmıyordu, karşı taraf anında yeni istek
+            // gönderebiliyordu. Apple Guideline 1.2 açısından da eksikti.
+            onPressed: () async {
               Navigator.pop(context);
-              Navigator.pop(context);
-              ref.read(firebaseChatProvider.notifier).deleteMatch(widget.match.id);
+              final ok = await BlockService.block(widget.match.userId);
+              if (ok) {
+                await ref
+                    .read(firebaseChatProvider.notifier)
+                    .deleteMatch(widget.match.id);
+              }
+              if (!context.mounted) return;
+              if (ok) Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(ok
+                      ? 'Kullanıcı engellendi'
+                      : 'Engelleme başarısız oldu, tekrar dene'),
+                ),
+              );
             },
             child: const Text(
               'Engelle',

@@ -50,12 +50,14 @@ class CustomNavigationBar extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Keşfet
+              // Listem — "Gitmek İstediklerim" ve "Gittiklerim".
+              // Eski "Keşfet" etiketi yanlıştı: o sayfa hiçbir şey keşfetmiyor,
+              // zaten gidilmiş yerleri listeliyordu. Canlı keşif Harita'da.
               _buildNavItem(
                 index: 0,
-                icon: Icons.explore_outlined,
-                activeIcon: Icons.explore,
-                label: 'Keşfet',
+                icon: Icons.bookmark_border_rounded,
+                activeIcon: Icons.bookmark_rounded,
+                label: 'Listem',
               ),
               
               // Harita

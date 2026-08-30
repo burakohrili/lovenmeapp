@@ -15,7 +15,10 @@ class ProfileSetupStep3Page extends ConsumerStatefulWidget {
 
 class _ProfileSetupStep3PageState extends ConsumerState<ProfileSetupStep3Page> {
   final Set<String> selectedHobbies = {};
-  final int minHobbies = 3;
+  // Hobiler ZORUNLU DEGIL: pivot sonrasi hicbir eslestirme, filtreleme veya
+  // siralama hobi kullanmiyor; yalnizca profilde gosteriliyordu. Uc zorunlu
+  // secim, kayittan ilk faydali eyleme giden yolu uzatan olu bir adimdi.
+  final int minHobbies = 0;
   final int maxHobbies = 10;
 
   // Hobi kategorileri ve hobileri - Türkçe karakterler düzeltildi
@@ -243,7 +246,7 @@ class _ProfileSetupStep3PageState extends ConsumerState<ProfileSetupStep3Page> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '3/7 - En az $minHobbies, en fazla $maxHobbies hobi seçin',
+                          '3/7 - İstersen hobi seç (en fazla $maxHobbies)',
                           style: TextStyle(
                             fontSize: 16,
                             color: AppColors.white.withOpacity(0.8),

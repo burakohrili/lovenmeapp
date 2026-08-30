@@ -14,23 +14,67 @@ import '../../../../core/theme/app_colors.dart';
 ///
 /// Bu bölüm bir *puan tablosu* olduğu için check-in kapısının önünde durur;
 /// fotoğraflı kişi listesi ve bağlantı kurma ise kapının arkasındadır.
-class VenueLeaderboardSection extends StatelessWidget {
+class VenueLeaderboardSection extends StatefulWidget {
   final String venueId;
 
-  const VenueLeaderboardSection({super.key, required this.venueId});
+  /// Yeniden yükleme sayacı. Yalnızca bu değer değişince yeni sorgu atılır.
+  /// Varsayılan 0 olduğu için bu widget'ı token vermeden kullanan yerler
+  /// (ör. ana sayfadaki mekan kartı) eskisi gibi çalışır.
+  final int refreshToken;
+
+  const VenueLeaderboardSection({
+    super.key,
+    required this.venueId,
+    this.refreshToken = 0,
+  });
+
+  @override
+  State<VenueLeaderboardSection> createState() =>
+      _VenueLeaderboardSectionState();
+}
+
+class _VenueLeaderboardSectionState extends State<VenueLeaderboardSection> {
+  late Future<List<LeaderboardEntry>> _future;
+
+  /// Son başarılı sonuç. Yeniden yüklerken spinner sıçraması olmasın diye
+  /// eldeki veri gösterilmeye devam eder.
+  List<LeaderboardEntry>? _last;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant VenueLeaderboardSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sayfa artık her cooldown tikinde yeniden çiziliyor; sorguyu SADECE
+    // mekan değiştiyse veya gerçek bir check-in olduysa tekrarla. Aksi halde
+    // her çizimde limit(500) Firestore okuması yapılırdı.
+    if (oldWidget.venueId != widget.venueId ||
+        oldWidget.refreshToken != widget.refreshToken) {
+      setState(() {
+        _future = _load();
+      });
+    }
+  }
+
+  Future<List<LeaderboardEntry>> _load() {
+    return LeaderboardService.getVenueLeaderboard(
+      widget.venueId,
+      currentUserId: FirebaseAuth.instance.currentUser?.uid,
+      limit: 5,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
     return FutureBuilder<List<LeaderboardEntry>>(
-      future: LeaderboardService.getVenueLeaderboard(
-        venueId,
-        currentUserId: currentUserId,
-        limit: 5,
-      ),
+      future: _future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            _last == null) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 20),
             child: Center(
@@ -43,7 +87,10 @@ class VenueLeaderboardSection extends StatelessWidget {
           );
         }
 
-        final entries = snapshot.data ?? const <LeaderboardEntry>[];
+        if (snapshot.hasData) {
+          _last = snapshot.data;
+        }
+        final entries = snapshot.data ?? _last ?? const <LeaderboardEntry>[];
 
         // Boşken gizlemek yerine davet göster: sıralama mekanın kalıcı bir
         // parçası, henüz kimse yoksa ilk sırayı almak bir teşvik.

@@ -42,6 +42,10 @@ class VenueDetailsSheet extends StatelessWidget {
   final bool hideCheckInButton;
   final bool hideFavoriteButton;
   final bool hideMayorSection;
+  /// Sıralamanın yeniden yüklenmesini tetikleyen sayaç. Yalnızca başarılı
+  /// check-in'de artar; her yeniden çizimde artmaz (yoksa 10 sn'lik cooldown
+  /// tikinde bile limit(500) Firestore sorgusu atılırdı).
+  final int leaderboardRefreshToken;
 
   const VenueDetailsSheet({
     super.key,
@@ -74,6 +78,7 @@ class VenueDetailsSheet extends StatelessWidget {
     this.hideCheckInButton = false, // 🏠 Home page'de check-in butonunu gizle
     this.hideFavoriteButton = false, // 🏠 Home page'de favori butonunu gizle
     this.hideMayorSection = false, // 🏠 Home page'de muhtar bölümünü gizle
+    this.leaderboardRefreshToken = 0,
   });
 
   // 🕒 Mekan kapanış saati kontrolü
@@ -311,44 +316,12 @@ class VenueDetailsSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            if (dailyMayor != null) Stack(
-              children: [
-                _buildDailyMayorCard(context),
-                
-                // Real-time mayor change detector
-                StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('daily_mayors')
-                      .doc('${venue.id}_${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}')
-                      .snapshots(),
-                  builder: (context, mayorSnapshot) {
-                    if (mayorSnapshot.hasData) {
-                      final currentMayorData = mayorSnapshot.data!.exists 
-                          ? mayorSnapshot.data!.data() as Map<String, dynamic>? 
-                          : null;
-                          
-                      // Mayor değişikliği tespit et
-                      if (currentMayorData != null && dailyMayor != null) {
-                        final currentMayorId = currentMayorData['userId'] ?? '';
-                        final cachedMayorId = dailyMayor!['userId'] ?? '';
-                        final currentDiamonds = currentMayorData['diamondsSpent'] ?? 0;
-                        final cachedDiamonds = dailyMayor!['diamondsSpent'] ?? 0;
-                        
-                        if (currentMayorId != cachedMayorId || currentDiamonds != cachedDiamonds) {
-                          // Kısa gecikme ile refresh tetikle
-                          Future.delayed(const Duration(milliseconds: 500), () {
-                            if (onRefreshUserData != null) {
-                              onRefreshUserData!();
-                            }
-                          });
-                        }
-                      }
-                    }
-                    return const SizedBox.shrink(); // Görünmez
-                  },
-                ),
-              ],
-            ),
+            // NOT: Buradaki görünmez StreamBuilder kaldırıldı. `if (dailyMayor
+            // != null)` içinde olduğu için tam da gerektiği durumda (henüz
+            // muhtar yokken biri muhtar olduğunda) hiç bağlanamıyordu, ve
+            // takip edilmeyen bir Future.delayed sızdırıyordu. Sayfa artık
+            // map_page tarafından push ile tazeleniyor.
+            if (dailyMayor != null) _buildDailyMayorCard(context),
             if (_shouldShowMayorshipCard()) _buildDiamondMayorshipCard(),
             // "Gitmek İstiyorum": henüz gidilmemiş yerler için niyet listesi.
             // Favori (kalp) butonundan farklı — o, gidilmiş yerler için.
@@ -367,48 +340,22 @@ class VenueDetailsSheet extends StatelessWidget {
             _buildDivider(),
             // Mekan içi sıralama: puan tablosu olduğu için check-in kapısının
             // önünde durur; kişi listesi ve bağlantı kurma kapının arkasında.
-            VenueLeaderboardSection(venueId: venue.id),
+            VenueLeaderboardSection(
+              venueId: venue.id,
+              refreshToken: leaderboardRefreshToken,
+            ),
             _buildDivider(),
             if (canSeeUsers) ...[
               _buildUsersHeader(),
               SizedBox(
-                height: 300, // Sabit yükseklik
-                child: Stack(
-                  children: [
-                    // Ana kullanıcı listesi (cache'den)
-                    buildCheckedInUsersList(venue, canSeeUsers),
-                    
-                    // Invisible real-time trigger (sadece yeni check-in'leri tespit eder)
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('check_ins')
-                          .where('venueId', isEqualTo: venue.id)
-                          .where('checkInTime', isGreaterThan: Timestamp.fromDate(
-                            DateTime.now().subtract(const Duration(minutes: 2)) // Son 2 dakika
-                          ))
-                          .limit(3) // Sadece son 3 check-in
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData && snapshot.data!.docChanges.isNotEmpty) {
-                          // Yeni check-in tespit edildi
-                          final newCheckIns = snapshot.data!.docChanges
-                              .where((change) => change.type == DocumentChangeType.added)
-                              .length;
-                              
-                          if (newCheckIns > 0) {
-                            // Kısa gecikme ile refresh tetikle (duplicate önlemek için)
-                            Future.delayed(const Duration(milliseconds: 1000), () {
-                              if (onRefreshUserData != null) {
-                                onRefreshUserData!();
-                              }
-                            });
-                          }
-                        }
-                        return const SizedBox.shrink(); // Görünmez
-                      },
-                    ),
-                  ],
-                ),
+                height: 300,
+                // NOT: Buradaki görünmez StreamBuilder da kaldırıldı —
+                // `if (canSeeUsers)` içinde olduğu için kapı kapalıyken hiç
+                // bağlanamıyordu, yani "check-in yaptım, liste açılsın"
+                // durumunu asla yakalayamıyordu. Ayrıca ilk snapshot tüm
+                // mevcut kayıtları added sayıp her açılışta boşuna yenileme
+                // tetikliyordu.
+                child: buildCheckedInUsersList(venue, canSeeUsers),
               ),
             ] else ...[
               _buildCheckInRequired(),
@@ -869,11 +816,10 @@ class VenueDetailsSheet extends StatelessWidget {
                   color: AppColors.success, size: 18),
               const SizedBox(width: 6),
               Text(
+                // Premium, check-in yapmadan kişi SAYISINI da göremez.
                 canSeeUsers
                     ? '$actualUserCount kişi burada'
-                    : isPremium 
-                        ? '$actualUserCount kişi burada'
-                        : 'Check-in yapın',
+                    : 'Check-in yapın',
                 style: const TextStyle(
                   color: AppColors.success,
                   fontWeight: FontWeight.w600,
@@ -964,14 +910,11 @@ class VenueDetailsSheet extends StatelessWidget {
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: isButtonDisabled ? null : () async {
-          onCheckIn(venue);
-          // Check-in sonrası veri yenile
-          if (onRefreshUserData != null) {
-            await Future.delayed(const Duration(milliseconds: 500));
-            onRefreshUserData!();
-          }
-        },
+        // Yenileme BURADA yapılmaz: eskiden 500 ms bekleyip onRefreshUserData
+        // çağrılıyordu, ama o an kullanıcı hâlâ "fotoğraflı/fotoğrafsız"
+        // seçim diyaloğuna bakıyor; check-in henüz olmamış oluyordu.
+        // Sayfa artık check-in tamamlanınca map_page tarafından tazeleniyor.
+        onPressed: isButtonDisabled ? null : () => onCheckIn(venue),
         style: ElevatedButton.styleFrom(
           backgroundColor: isButtonDisabled
               ? AppColors.grey400
@@ -1915,34 +1858,43 @@ class VenueDetailsSheet extends StatelessWidget {
   }
 
   // 🤝 MATCH OLUŞTURMA FONKSIYONU
-  Future<void> _createMatchIfNeeded(String currentUserId, String otherUserId) async {
+  //
+  // NOT: Buradaki "onay almadan bağlantı yaratma" davranışı Aşama 3'te tamamen
+  // kaldırılacak; bağlantı yalnızca chat_request akışından kurulacak. Şimdilik
+  // yalnızca sorgu kapsamı düzeltildi: eskiden TÜM matches koleksiyonu çekilip
+  // istemcide taranıyordu.
+  Future<void> _createMatchIfNeeded(
+      String currentUserId, String otherUserId) async {
     try {
       final firestore = FirebaseFirestore.instance;
-      
-      // Önce bu iki kullanıcı arasında aktif match var mı kontrol et
-      final existingMatch = await firestore
+
+      // Firestore'da OR yok; iki yönü ayrı ayrı ve dar kapsamla sorguluyoruz.
+      final asUser1 = await firestore
           .collection('matches')
-          .where('isActive', isEqualTo: true)
+          .where('user1Id', isEqualTo: currentUserId)
+          .where('user2Id', isEqualTo: otherUserId)
+          .limit(1)
           .get();
-      
-      bool matchExists = false;
-      for (var doc in existingMatch.docs) {
-        final data = doc.data();
-        final user1 = data['user1Id'];
-        final user2 = data['user2Id'];
-        
-        if ((user1 == currentUserId && user2 == otherUserId) ||
-            (user1 == otherUserId && user2 == currentUserId)) {
-          matchExists = true;
-          break;
-        }
-      }
-      
-      // Eğer match yoksa oluştur
+
+      final asUser2 = asUser1.docs.isNotEmpty
+          ? null
+          : await firestore
+              .collection('matches')
+              .where('user1Id', isEqualTo: otherUserId)
+              .where('user2Id', isEqualTo: currentUserId)
+              .limit(1)
+              .get();
+
+      final matchExists =
+          asUser1.docs.isNotEmpty || (asUser2?.docs.isNotEmpty ?? false);
+
       if (!matchExists) {
         await firestore.collection('matches').add({
           'user1Id': currentUserId,
           'user2Id': otherUserId,
+          // `users` dizisi, katılımcı bazlı güvenlik kuralının ve
+          // areAlreadyMatchedWith sorgusunun çalışması için şart.
+          'users': [currentUserId, otherUserId],
           'matchedAt': FieldValue.serverTimestamp(),
           'isActive': true,
           'lastMessage': null,

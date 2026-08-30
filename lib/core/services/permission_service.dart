@@ -121,7 +121,7 @@ class PermissionService {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               child: const Text(
-                'Continue',
+                'Devam Et',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

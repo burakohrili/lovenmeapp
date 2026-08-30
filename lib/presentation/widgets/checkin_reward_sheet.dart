@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/gamification_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/quest_service.dart';
 
 /// Check-in sonrası kazanılan ilerlemeyi kutlayan sayfa altı paneli.
 ///
@@ -12,10 +13,14 @@ class CheckInRewardSheet extends StatelessWidget {
   final CheckInReward reward;
   final String venueName;
 
+  /// Bu check-in ile tamamlanan gorevler.
+  final List<Quest> completedQuests;
+
   const CheckInRewardSheet({
     super.key,
     required this.reward,
     required this.venueName,
+    this.completedQuests = const [],
   });
 
   /// Kazanılan bir şey varsa paneli gösterir; yoksa hiçbir şey yapmaz.
@@ -23,13 +28,67 @@ class CheckInRewardSheet extends StatelessWidget {
     BuildContext context, {
     required CheckInReward? reward,
     required String venueName,
+    List<Quest> completedQuests = const [],
   }) {
-    if (reward == null || !reward.hasAnything) return;
+    final hasReward = reward != null && reward.hasAnything;
+    if (!hasReward && completedQuests.isEmpty) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => CheckInRewardSheet(reward: reward, venueName: venueName),
+      builder: (_) => CheckInRewardSheet(
+        reward: reward ?? const CheckInReward(
+          currentStreak: 0,
+          streakIncreased: false,
+          streakReset: false,
+          level: 1,
+          levelUp: false,
+          newBadges: [],
+        ),
+        venueName: venueName,
+        completedQuests: completedQuests,
+      ),
     );
+  }
+
+  /// Tamamlanan gorev satirlari.
+  List<Widget> _questRows() {
+    if (completedQuests.isEmpty) return const [];
+    return [
+      const SizedBox(height: 14),
+      ...completedQuests.map((q) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.flag_rounded,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Gorev tamamlandi: ${q.title}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      if (q.rewardText.isNotEmpty)
+                        Text(
+                          q.rewardText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )),
+    ];
   }
 
   @override
@@ -71,7 +130,8 @@ class CheckInRewardSheet extends StatelessWidget {
             _levelBlock(),
           ],
           if (reward.newBadges.isNotEmpty) ...[
-            const SizedBox(height: 20),
+            ..._questRows(),
+          const SizedBox(height: 20),
             Text(
               reward.newBadges.length == 1 ? 'Yeni rozet' : 'Yeni rozetler',
               style: const TextStyle(

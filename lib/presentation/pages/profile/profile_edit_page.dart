@@ -798,17 +798,29 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         throw 'İsim alanı boş olamaz';
       }
       
+      // 18+ KAPISI: Bu ekranda HİÇ yaş doğrulaması yoktu. Kullanıcı kayıtta
+      // 18 girip buradan saniyeler içinde 13 yapabiliyordu; yani üç ayrı
+      // hukuki metinde verilen "18+" taahhüdü tek ekranda geçersiz
+      // oluyordu. Apple 5.1.1 incelemesi tam olarak bunu test eder.
       if (_ageController.text.trim().isEmpty) {
         throw 'Yaş alanı boş olamaz';
       }
+
+      final parsedAge = int.tryParse(_ageController.text.trim());
+      if (parsedAge == null) {
+        throw 'Yaş sayı olmalı';
+      }
+      if (parsedAge < 18 || parsedAge > 99) {
+        throw 'Yaş 18-99 arasında olmalı';
+      }
+
+      // Cinsiyet artık zorunlu değil — kayıt akışında da opsiyonel.
+      // (Eskiden burada zorunluydu ve iki akış çelişiyordu.)
       
       if (photos.isEmpty) {
         throw 'En az 1 fotoğraf eklemelisiniz';
       }
       
-      if (selectedGender.isEmpty) {
-        throw 'Cinsiyet seçmelisiniz';
-      }
 
       await _loadingManager.executeOperation(
         'save_profile',

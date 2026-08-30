@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,6 +18,8 @@ import '../../../../core/services/mayor_conflict_detection_service.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/gamification_service.dart';
 import '../../../../core/services/saved_venues_service.dart';
+import '../../../../core/services/quest_service.dart';
+import '../../../../core/services/analytics_service.dart';
 
 enum CheckInDisplayMode {
   map,
@@ -46,6 +49,8 @@ class CheckInService {
   /// Check-in akışı bool döndürdüğü için ödül bu alanda taşınır; UI
   /// başarıdan sonra okuyup kutlama gösterir.
   CheckInReward? lastCheckInReward;
+  /// Son check-in ile tamamlanan gorevler (kutlama panelinde gosterilir).
+  List<Quest> lastCompletedQuests = const [];
 
   /// Bu kullanıcı bu mekana daha önce hiç gelmiş mi? (kâşif rozetleri için)
   ///
@@ -210,7 +215,11 @@ class CheckInService {
 
       final hasCheckedInHere = userCheckedInVenues.contains(venueId);
 
-      if (!isPremium && !hasCheckedInHere) {
+      // MEVCUDİYET KAPISI — veri katmanı.
+      // Eskiden `!isPremium && !hasCheckedInHere` idi: premium kullanıcı,
+      // hiç gitmediği mekanın kişi listesini SUNUCUDAN çekebiliyordu.
+      // Kapı satın alınamaz; premium'un değeri kapıyı atlamak değil.
+      if (!hasCheckedInHere) {
         return [];
       }
 
@@ -1827,13 +1836,11 @@ class CheckInService {
       final userPhoto = userData?['mainPhoto'];
       final userAge = userData?['age'] ?? 25;
 
-      // Kullanıcının totalCheckIns sayısını artır
-      try {
-        await _firestore.collection('users').doc(user.uid).update({
-          'totalCheckIns': FieldValue.increment(1),
-          'lastCheckInDate': FieldValue.serverTimestamp(),
-        });
-      } catch (statsError) {}
+      // NOT: totalCheckIns / lastCheckInDate artık burada DEĞİL,
+      // GamificationService.registerCheckIn içindeki işlemde artırılıyor.
+      // Eskiden buradaki update boş bir catch ile sarılıydı; sessizce
+      // başarısız olduğunda seviye ve rozetler eski sayıdan hesaplanıp
+      // kalıcı olarak kayıyordu.
 
       // Günlük muhtar kontrolü ve ataması
       await checkAndAssignDailyMayor(venue.id, user.uid, userName, userPhoto,
@@ -1862,11 +1869,30 @@ class CheckInService {
           ? await SavedVenuesService.visitedCount(user.uid)
           : 0;
 
+      final isNewVenue = await _isNewVenueForUser(user.uid, venue.id);
+
       lastCheckInReward = await GamificationService.registerCheckIn(
         userId: user.uid,
-        isNewVenue: await _isNewVenueForUser(user.uid, venue.id),
+        isNewVenue: isNewVenue,
         closedFromList: closedFromList,
         listVisitedCount: listVisited,
+      );
+
+      // Gorev/kampanya ilerlemesi — "Gitmek Istiyorum" kapanisiyla ayni desen.
+      // OLCUM: 4.3(b) 'musteri cekiyor mu' sorusunun ve kampanya
+      // faturasinin dayanagi. Hicbir olay akisi bloke etmez.
+      AnalyticsService.checkInCompleted(
+        venueId: venue.id,
+        withPhoto: false,
+        isNewVenue: isNewVenue,
+      );
+      if (closedFromList) AnalyticsService.savedVenueClosed(venue.id);
+
+      lastCompletedQuests = await QuestService.registerCheckIn(
+        userId: user.uid,
+        venueId: venue.id,
+        venueCategory: venue.category,
+        isNewVenue: isNewVenue,
       );
 
       return true;
@@ -2018,12 +2044,19 @@ class CheckInService {
       final userAge = userData['age'] ?? 25;
 
       // 2. Fotoğrafı Firebase Storage'a upload et (check-in öncesi)
+      // Fotoğraf yüklenemezse check-in'i FOTOĞRAFSIZ tamamlanmış saymak
+      // yanlış: kullanıcı fotoğraflı check-in yaptığını sanıyor, kayıt
+      // photoUrl: null ile yazılıyor ve akışta hiç görünmüyordu.
+      // Artık hata yukarı taşınıyor; çağıran kullanıcıya bildiriyor.
       String? imageUrl;
       try {
         imageUrl = await uploadImageToStorage(image, user.uid);
-        if (imageUrl != null) {
-        } else {}
-      } catch (uploadError) {}
+      } catch (uploadError) {
+        throw 'Fotoğraf yüklenemedi. Bağlantını kontrol edip tekrar dene.';
+      }
+      if (imageUrl == null) {
+        throw 'Fotoğraf yüklenemedi. Bağlantını kontrol edip tekrar dene.';
+      }
 
       // 3. Firebase'e check-in dokümanı kaydet (fotoğraf ile)
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -2068,19 +2101,21 @@ class CheckInService {
       // 5. User check-in listesini güncelle
       userCheckedInVenues.add(venue.id);
 
-      // 6. Kullanıcının totalCheckIns sayısını artır
-      try {
-        await _firestore.collection('users').doc(user.uid).update({
-          'totalCheckIns': FieldValue.increment(1),
-          'lastCheckInDate': FieldValue.serverTimestamp(),
-        });
-      } catch (statsError) {}
+      // 6. NOT: totalCheckIns / lastCheckInDate artık burada DEĞİL,
+      // GamificationService.registerCheckIn içindeki işlemde artırılıyor.
+      // Eskiden buradaki update boş bir catch ile sarılıydı; sessizce
+      // başarısız olduğunda seviye ve rozetler eski sayıdan hesaplanıp
+      // kalıcı olarak kayıyordu.
 
       // 7. Günlük muhtar kontrolü ve ataması
       try {
         await checkAndAssignDailyMayor(venue.id, user.uid, userName, userPhoto,
             venueName: venue.name);
-      } catch (mayorError) {}
+      } catch (mayorError) {
+        // Muhtar ataması check-in'i geçersiz kılmaz ama sessizce
+        // kaybolmamalı; günlüğe düşsün.
+        debugPrint('Muhtar atamasi basarisiz: $mayorError');
+      }
 
       // 8. Feed post oluştur (fotoğraf ile)
       try {
@@ -2098,7 +2133,9 @@ class CheckInService {
           postImage: imageUrl, // Firebase Storage URL (null olabilir)
           caption: '${venue.name} mekanına fotoğraflı check-in yaptı',
         );
-      } catch (feedError) {}
+      } catch (feedError) {
+        debugPrint('Akis gonderisi olusturulamadi: $feedError');
+      }
 
       // 🎮 İlerleme katmanı: seri, seviye, rozet (tek kişilik de çalışır)
       // "Gitmek Istiyorum" listesindeki kaydi bu ziyaret kapatiyor mu?
@@ -2108,11 +2145,30 @@ class CheckInService {
           ? await SavedVenuesService.visitedCount(user.uid)
           : 0;
 
+      final isNewVenue = await _isNewVenueForUser(user.uid, venue.id);
+
       lastCheckInReward = await GamificationService.registerCheckIn(
         userId: user.uid,
-        isNewVenue: await _isNewVenueForUser(user.uid, venue.id),
+        isNewVenue: isNewVenue,
         closedFromList: closedFromList,
         listVisitedCount: listVisited,
+      );
+
+      // Gorev/kampanya ilerlemesi — "Gitmek Istiyorum" kapanisiyla ayni desen.
+      // OLCUM: 4.3(b) 'musteri cekiyor mu' sorusunun ve kampanya
+      // faturasinin dayanagi. Hicbir olay akisi bloke etmez.
+      AnalyticsService.checkInCompleted(
+        venueId: venue.id,
+        withPhoto: false,
+        isNewVenue: isNewVenue,
+      );
+      if (closedFromList) AnalyticsService.savedVenueClosed(venue.id);
+
+      lastCompletedQuests = await QuestService.registerCheckIn(
+        userId: user.uid,
+        venueId: venue.id,
+        venueCategory: venue.category,
+        isNewVenue: isNewVenue,
       );
 
       return true;

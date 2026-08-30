@@ -129,11 +129,13 @@ class _ProfileSetupStep1PageState extends ConsumerState<ProfileSetupStep1Page> {
     return null;
   }
 
+  /// Soyisim ZORUNLU DEĞİL.
+  ///
+  /// Mekan keşfi için yasal tam ada ihtiyaç yok; zorunlu tutmak KVKK'nın
+  /// veri minimizasyonu ilkesiyle de çelişiyordu. Alan duruyor, dolduran
+  /// doldurur.
   String? _validateSurname(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Soyisim gerekli';
-    }
-    if (value.length < 2) {
+    if (value != null && value.isNotEmpty && value.length < 2) {
       return 'Soyisim en az 2 karakter olmalı';
     }
     return null;

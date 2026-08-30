@@ -114,8 +114,6 @@ class IAPConfig {
       'isPopular': false,
       'features': [
         'Sınırsız chat isteği',
-        'Reklamsız deneyim',
-        'Mekanda daha görünür ol',
         'Özel rozetler',
       ],
     },
@@ -130,9 +128,7 @@ class IAPConfig {
       'isPopular': true,
       'features': [
         'Sınırsız chat isteği',
-        'Reklamsız deneyim',
         'Geçmiş check-in\'leri görüntüle',
-        'Mekanda daha görünür ol',
         'Özel rozetler',
         'Öncelikli destek',
       ],
@@ -149,10 +145,8 @@ class IAPConfig {
       'isPopular': false,
       'features': [
         'Sınırsız chat isteği',
-        'Reklamsız deneyim',
         'Geçmiş check-in\'leri görüntüle',
         'Karşılaştığın kişilerin geçmişini gör',
-        'Mekanda daha görünür ol',
         'Özel rozetler',
         'Öncelikli destek',
         '%33 indirim',

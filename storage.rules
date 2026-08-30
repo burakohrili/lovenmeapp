@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// ============================================================
+// Cloud Storage güvenlik kuralları
+// ============================================================
+// Bu dosya daha önce depoda YOKTU ve firebase.json'da da tanımlı değildi —
+// yani Storage güvenliği sürüm kontrolü dışında, yalnızca konsolda ne varsa
+// oydu. Uygulama buraya profil fotoğrafı, check-in fotoğrafı, sohbet görseli
+// ve sesli mesaj yüklüyor.
+//
+// Not: Firebase indirme URL'leri (`?alt=media&token=...`) kuralları atlar;
+// buradaki read kuralları yalnızca doğrudan SDK okumalarını etkiler.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+
+    function underMb(n) {
+      return request.resource.size < n * 1024 * 1024;
+    }
+
+    // Onboarding profil fotoğrafları: users/{uid}/profile_photos/{dosya}
+    match /users/{userId}/profile_photos/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && underMb(10);
+    }
+
+    // Profil düzenleme / hızlı fotoğraf değişimi: user_photos/{uid}_...jpg
+    // Dosya adı her zaman kullanıcının uid'si ile başlar.
+    match /user_photos/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && fileName.matches(request.auth.uid + '_.*')
+                   && isImage()
+                   && underMb(10);
+    }
+
+    // Check-in fotoğrafı: checkins/{timestamp}_{uid}/photo.jpg
+    match /checkins/{checkInId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && checkInId.matches('.*_' + request.auth.uid)
+                   && isImage()
+                   && underMb(10);
+    }
+
+    // Sohbet görselleri ve sesli mesajlar.
+    // TODO: Katılımcı doğrulaması firestore.get() ile yapılmalı; şimdilik
+    // oturum + tür + boyut sınırı uygulanıyor.
+    match /chat_images/{matchId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isImage() && underMb(10);
+    }
+
+    match /voice_messages/{matchId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isAudio() && underMb(15);
+    }
+
+    // Tanımlanmamış her yol kapalıdır.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

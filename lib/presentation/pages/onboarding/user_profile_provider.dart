@@ -113,7 +113,9 @@ UserProfile {
   }
 
   bool get isValidForStep1 =>
-      name != null && surname != null && age != null && gender != null;
+      // Soyisim ve cinsiyet artik ZORUNLU DEGIL (veri minimizasyonu ve
+      // 4.3 gerekcesiyle); yalnizca ad ve yas gerekli.
+      name != null && name!.isNotEmpty && age != null;
   bool get isValidForStep2 => localPhotoPaths.length >= 2;
 }
 
@@ -188,14 +190,14 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
             // Mekan kaydı başarısız olsa bile check-in'ler oluşturulsun
           }
 
-          // 1️⃣ GÜNLÜK CHECK-IN: Harita için (resetlenecek)
-          await FirebaseFirestore.instance.collection('check_ins').add({
-            ...venueData,
-            'fromFavorite':
-                false, // Normal check-in gibi davranacak (günlük reset)
-            'isInitialRegistration':
-                true, // İlk kayıtta oluşturulan check-in (cooldown için önemsiz)
-          });
+          // SAHTE CHECK-IN ÜRETİMİ KALDIRILDI (30.08.2026).
+          // Burada her favori mekan için `isInitialRegistration: true` bir
+          // check-in yazılıyordu; yani kullanıcı hiç gitmediği 3-5 mekana
+          // kayıt olur olmaz "check-in yapmış" görünüyordu. Kod bunu üç ayrı
+          // yerde tekrar filtrelemek zorunda kalıyordu (mevcudiyet kapısı,
+          // cooldown, kâşif rozetleri) ve bir reviewer için "gitmeden check-in
+          // oluşuyor" demekti — 4.3 tartışmasında son isteyeceğimiz şey.
+          // Favori kaydı aşağıdaki kalıcı geçmişte zaten tutuluyor.
 
           // 2️⃣ KALICI CHECK-IN: Discover için (kalıcı kalacak)
           await FirebaseFirestore.instance
@@ -245,7 +247,6 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
       'isPremium': false,
 
       // Günlük limitler - YENİ
-      'dailyLikesRemaining': 5,
       'dailySuperLikesRemaining': 0,
       'lastLimitReset': FieldValue.serverTimestamp(),
     };

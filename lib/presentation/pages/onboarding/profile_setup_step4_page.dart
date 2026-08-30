@@ -1215,7 +1215,7 @@ class _ProfileSetupStep4PageState extends ConsumerState<ProfileSetupStep4Page> {
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.favorite, color: AppColors.white, size: 20),
+                          const Icon(Icons.place_rounded, color: AppColors.white, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             '${selectedVenues.length} / $maxVenues seçildi',

@@ -322,7 +322,7 @@ class MayorConflictDetectionService {
         'userId': attempt.userId,
         'type': 'mayor_conflict_refund',
         'title': 'Diamond Refund',
-        'message': 'You received a refund of ${attempt.diamondAmount} diamonds from $venueName due to a timing conflict.',
+        'body': 'You received a refund of ${attempt.diamondAmount} diamonds from $venueName due to a timing conflict.',
         'data': {
           'venueId': attempt.venueId,
           'venueName': venueName,

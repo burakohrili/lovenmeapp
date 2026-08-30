@@ -1,10 +1,7 @@
 // lib/presentation/widgets/auth/forgot_password_bottom_sheet.dart
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'dart:math';
 import 'dart:async';
 import '../../../core/theme/app_colors.dart';
 import '../../../widgets/production_button.dart';
@@ -32,7 +29,6 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
   bool _isLoading = false;
   bool _codeSent = false;
   bool _codeVerified = false;
-  String? _sentCode;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
   DateTime? _lastCodeSentTime;
@@ -128,88 +124,34 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
-  String _generateVerificationCode() {
-    final random = Random();
-    return (100000 + random.nextInt(900000)).toString();
-  }
-
-  Future<void> _sendEmailWithResend(String email, String code) async {
-    try {
-      // Firebase Function'ı çağır
-      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final callable = functions.httpsCallable('sendPasswordResetEmail');
-
-      final result = await callable.call({
-        'email': email,
-        'code': code,
-        'userName': null, // Kullanıcı adı isteğe bağlı
-      });
-
-      if (result.data['success'] == true) {
-      } else {
-        throw Exception(result.data['error'] ?? 'Email gönderilemedi');
-      }
-    } catch (e) {
-      throw Exception('Email gönderilemedi');
-    }
-  }
-
+  /// Kodu SUNUCU üretir ve e-postayı sunucu gönderir.
+  ///
+  /// GÜVENLİK: Bu istemci artık doğrulama kodunu ne üretir, ne okur, ne yazar.
+  /// Eskiden kod burada üretilip herkese açık bir Firestore dokümanına
+  /// yazılıyordu; bu, kimlik doğrulaması gerektirmeyen hesap ele geçirmeye
+  /// izin veriyordu. `password_reset_codes` artık kurallarla tamamen kapalı.
   Future<void> _sendVerificationCode() async {
-    // Geçici olarak validation'ı atla
-    // Validation check
-    if (_emailController.text.trim().isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Lütfen e-posta adresinizi girin'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      _showError('Lütfen e-posta adresinizi girin');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Önce Firestore'da kullanıcının var olup olmadığını kontrol et
-      final userQuery = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: _emailController.text.trim())
-          .limit(1)
-          .get();
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final result = await functions
+          .httpsCallable('sendPasswordResetEmail')
+          .call({'email': email});
 
-      if (userQuery.docs.isEmpty) {
-        throw FirebaseAuthException(
-          code: 'user-not-found',
-          message: 'Bu email adresi ile kayıtlı kullanıcı bulunamadı.',
-        );
+      final data = Map<String, dynamic>.from(result.data as Map);
+
+      if (data['success'] != true) {
+        throw Exception(data['error'] ?? 'Kod gönderilemedi');
       }
 
-      // 6 haneli doğrulama kodu oluştur
-      _sentCode = _generateVerificationCode();
-
-      // Firestore'da geçici kod kaydet (5 dakika expire)
-      await FirebaseFirestore.instance
-          .collection('password_reset_codes')
-          .doc(_emailController.text.trim())
-          .set({
-        'code': _sentCode,
-        'email': _emailController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': DateTime.now()
-            .add(const Duration(minutes: 5))
-            .millisecondsSinceEpoch,
-      });
-
-      // Resend ile email gönder
-      try {
-        await _sendEmailWithResend(_emailController.text.trim(), _sentCode!);
-      } catch (emailError) {
-        // Email hatası olsa bile kod kaydedildi, devam et
-      }
-
-      // Cooldown timer'ı başlat
       _lastCodeSentTime = DateTime.now();
       _startCooldownTimer();
 
@@ -220,48 +162,17 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            // Hesabın var olup olmadığını sızdırmamak için ifade nötr.
             content: Text(
-                'Doğrulama kodu ${_emailController.text} adresine gönderildi'),
+              'Bu adres kayıtlıysa doğrulama kodu $email adresine gönderildi',
+            ),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 5),
           ),
         );
       }
-    } on FirebaseAuthException catch (e) {
-      String message = 'Bir hata oluştu';
-
-      switch (e.code) {
-        case 'user-not-found':
-          message = 'Bu email adresi ile kayıtlı kullanıcı bulunamadı';
-          break;
-        case 'invalid-email':
-          message = 'Geçersiz email adresi';
-          break;
-        case 'too-many-requests':
-          message =
-              'Çok fazla deneme yapıldı. Lütfen daha sonra tekrar deneyin';
-          break;
-        default:
-          message = e.message ?? 'Bir hata oluştu';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bir hata oluştu. Lütfen tekrar deneyin'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -269,62 +180,18 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
     }
   }
 
+  /// Kod artık istemcide doğrulanamaz (sunucuda hash olarak saklanıyor).
+  /// Burada yalnızca biçim kontrolü yapılır; gerçek doğrulama şifre
+  /// belirlenirken sunucuda, deneme sayacıyla birlikte yapılır.
   Future<void> _verifyCode() async {
-    if (!_formKey.currentState!.validate()) return;
+    final code = _codeController.text.trim();
 
-    setState(() => _isLoading = true);
-
-    try {
-      // Firestore'dan kodu kontrol et
-      final doc = await FirebaseFirestore.instance
-          .collection('password_reset_codes')
-          .doc(_emailController.text.trim())
-          .get();
-
-      if (!doc.exists) {
-        throw Exception('Doğrulama kodu bulunamadı');
-      }
-
-      final data = doc.data()!;
-      final savedCode = data['code'] as String;
-      final expiresAt = data['expiresAt'] as int;
-
-      // Kod expired mi kontrol et
-      if (DateTime.now().millisecondsSinceEpoch > expiresAt) {
-        throw Exception('Doğrulama kodunun süresi dolmuş');
-      }
-
-      // Kod eşleşiyor mu kontrol et
-      if (savedCode != _codeController.text.trim()) {
-        throw Exception('Geçersiz doğrulama kodu');
-      }
-
-      setState(() {
-        _codeVerified = true;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Doğrulama kodu onaylandı'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    if (code.length != 6 || int.tryParse(code) == null) {
+      _showError('Doğrulama kodu 6 haneli olmalı');
+      return;
     }
+
+    setState(() => _codeVerified = true);
   }
 
   Future<void> _updatePassword() async {
@@ -333,89 +200,61 @@ class _ForgotPasswordBottomSheetState extends State<ForgotPasswordBottomSheet> {
     setState(() => _isLoading = true);
 
     try {
-      // Firebase Admin SDK kullanarak şifre değişikliği yapmak için
-      // Firebase Functions kullanmak gerekiyor, ama daha basit bir yöntem var:
-      // 1. Önce şifre sıfırlama email'i gönder
-      // 2. Sonra kullanıcıdan email'deki link ile şifreyi değiştirmesini iste
-
-      // VEYA doğrudan Cloud Functions ile şifre değiştir
-      // Ama en güvenli yöntem: Kullanıcıyı otomatik olarak giriş yap ve şifreyi değiştir
-
-      // Email ile kullanıcıyı bul ve admin şifre sıfırlama yap
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final callable = functions.httpsCallable('resetUserPassword');
+      final result = await functions.httpsCallable('resetUserPassword').call({
+        'email': _emailController.text.trim(),
+        'newPassword': _newPasswordController.text.trim(),
+        'verificationCode': _codeController.text.trim(),
+      });
 
-      try {
-        final result = await callable.call({
-          'email': _emailController.text.trim(),
-          'newPassword': _newPasswordController.text.trim(),
-          'verificationCode': _codeController.text.trim(),
-        });
+      final data = Map<String, dynamic>.from(result.data as Map);
 
-        if (result.data['success'] == true) {
-          // Geçici kodu sil
-          await FirebaseFirestore.instance
-              .collection('password_reset_codes')
-              .doc(_emailController.text.trim())
-              .delete();
-
-          if (mounted) {
-            Navigator.of(context).pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Şifreniz başarıyla değiştirildi. '
-                  'Yeni şifreniz ile giriş yapabilirsiniz.',
-                ),
-                backgroundColor: AppColors.success,
-                duration: Duration(seconds: 4),
-              ),
-            );
-          }
-        } else {
-          throw Exception(result.data['error'] ?? 'Şifre değiştirilemedi');
-        }
-      } catch (functionsError) {
-        // Firebase Functions çalışmıyorsa, eski yöntemi kullan
-        // Password reset email gönder
-        await FirebaseAuth.instance.sendPasswordResetEmail(
-          email: _emailController.text.trim(),
-        );
-
-        // Geçici kodu sil
-        await FirebaseFirestore.instance
-            .collection('password_reset_codes')
-            .doc(_emailController.text.trim())
-            .delete();
-
+      if (data['success'] == true) {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Şifre sıfırlama linki email adresinize gönderildi. '
-                'Email\'inizdeki linke tıklayarak yeni şifrenizi belirleyebilirsiniz.',
+                'Şifreniz başarıyla değiştirildi. '
+                'Yeni şifreniz ile giriş yapabilirsiniz.',
               ),
-              backgroundColor: AppColors.warning,
-              duration: Duration(seconds: 5),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 4),
             ),
           );
         }
+        return;
       }
+
+      final error = (data['error'] ?? 'Şifre değiştirilemedi').toString();
+
+      // Kod hatalıysa kullanıcıyı kod adımına geri al — yeniden yazabilsin.
+      final codeProblem = error.contains('kod') || error.contains('Kod');
+      if (codeProblem && mounted) {
+        setState(() => _codeVerified = false);
+      }
+
+      _showError(error);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      // Eskiden burada sessizce Firebase'in kendi sıfırlama e-postası
+      // gönderiliyordu; bu, gerçek hatayı gizleyip kullanıcıya ikinci bir
+      // e-posta yolluyordu. Artık hata olduğu gibi gösteriliyor.
+      _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   @override

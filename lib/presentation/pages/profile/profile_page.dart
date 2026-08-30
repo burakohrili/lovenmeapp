@@ -2004,8 +2004,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> with WidgetsBindingOb
   /// Google Pay elmas satın alma başarılı olduğunda çağrılır
   void _onDiamondPurchaseSuccess(int diamonds) async {
     try {
-      // Kullanıcıya elmasi ekle
-      await _muhtarService.addUserDiamonds(diamonds);
+      // ÇİFT VERME DÜZELTİLDİ (30.08.2026):
+      // Buradaki UniversalPaymentButton, IAPPaymentButton'a yönleniyor ve
+      // IAPService satın alma akışında elmasları ZATEN kullanıcının
+      // dokümanına ekliyor. Ardından burada addUserDiamonds tekrar
+      // çağrılınca Profil sekmesinden alım yapan kullanıcı elmasları İKİ KEZ
+      // alıyordu. (Harita sekmesindeki yol bu hatayı içermiyordu.)
+      // Artık yalnızca bakiye tazeleniyor.
+      await _loadInitialDiamondBalance();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -13,6 +13,7 @@ import 'core/services/notification_service.dart';
 import 'core/services/iap_service.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 // Background handler - main fonksiyonunun dışında olmalı
 @pragma('vm:entry-point')
@@ -41,8 +42,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     // Notification details
     const androidDetails = AndroidNotificationDetails(
       'lovenme_channel',
-      'LoveNMe Notifications',
-      channelDescription: 'Notifications for LoveNMe app',
+      'LoveNMe Bildirimleri',
+      channelDescription: 'LoveNMe bildirimleri',
       importance: Importance.high,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
@@ -151,6 +152,16 @@ class MyApp extends StatelessWidget {
       title: 'LoveNMe',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      // Uygulama metinlerinin tamami Turkce. Bu bildirilmeyince Flutter
+      // cerceve metinleri Ingilizceye dusuyor ve karisik dil olusuyordu
+      // (Apple 2.3.7 / 4.0 altinda isaretlenen tipik kusur).
+      locale: const Locale('tr'),
+      supportedLocales: const [Locale('tr')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         dragDevices: {
           PointerDeviceKind.mouse,

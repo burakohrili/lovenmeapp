@@ -1,4 +1,5 @@
 // lib/core/providers/notification_provider.dart
+import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -68,18 +69,43 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  // DÜZELTİLEN İKİ HATA (30.08.2026):
+  //  1. `.listen()` hiçbir değişkene atanmıyor, `dispose` da geçersiz
+  //     kılınmıyordu — dinleyici süreç boyunca açık kalıyordu.
+  //  2. Kullanıcı kimliği bir kez okunuyordu; çıkış/giriş sonrası
+  //     ÖNCEKİ kullanıcının bildirimleri gösterilmeye devam ediyordu.
+  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<QuerySnapshot>? _notificationsSubscription;
+  String? _currentUserId;
   
   // 🎯 İlk yükleme + Realtime dinleme
   void _initializeNotifications() {
-    final user = _auth.currentUser;
-    if (user == null) return;
-    
+    _authSubscription ??= _auth.authStateChanges().listen((user) {
+      _resubscribe(user?.uid);
+    });
+    _resubscribe(_auth.currentUser?.uid);
+  }
+
+  void _resubscribe(String? userId) {
+    if (userId == _currentUserId && _notificationsSubscription != null) {
+      return;
+    }
+    _currentUserId = userId;
+
+    _notificationsSubscription?.cancel();
+    _notificationsSubscription = null;
+
+    if (userId == null) {
+      state = NotificationState(notifications: const [], unreadCount: 0);
+      return;
+    }
+
     state = state.copyWith(isLoading: true);
-    
-    // Realtime stream dinleme
-    _firestore
+
+    _notificationsSubscription = _firestore
         .collection('notifications')
-        .where('userId', isEqualTo: user.uid)
+        .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
@@ -133,6 +159,12 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   // 🔄 Manuel refresh (pull-to-refresh için)
   void refresh() {
     _initializeNotifications();
+  }
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _notificationsSubscription?.cancel();
+    super.dispose();
   }
 }
 

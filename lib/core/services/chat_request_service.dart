@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/chat_request_model.dart';
 import 'notification_service.dart';
 import 'premium_service.dart';
+import 'block_service.dart';
 
 /// Chat Request Service - Tüm chat isteği işlemlerini yönetir
 class ChatRequestService {
@@ -40,6 +41,14 @@ class ChatRequestService {
         return false;
       }
 
+      // 🛡️ ENGELLEME KONTROLÜ (iki yönlü)
+      // Bu kontrol hiç yoktu: engellenen kişi, kendisini engelleyene bağlantı
+      // isteği göndermeye devam edebiliyordu. Engelleme, göstermelik değil
+      // gerçek bir sınır olmalı.
+      if (await BlockService.isBlockedEitherWay(toUserId)) {
+        return false;
+      }
+
       // 🛡️ DUPLICATE KONTROLÜ: Aynı kullanıcıya zaten istek gönderilmiş mi?
       final alreadySent = await hasSentRequest(toUserId);
       if (alreadySent) {
@@ -69,7 +78,7 @@ class ChatRequestService {
           // Premium değilse günlük limit kontrol et
           final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
           final userData = userDoc.data();
-          final dailyChatRequestsRemaining = userData?['dailyChatRequestsRemaining'] ?? 0;
+          final dailyChatRequestsRemaining = userData?['dailyChatRequestsRemaining'] ?? 5;
           
           if (dailyChatRequestsRemaining <= 0) {
             return false;

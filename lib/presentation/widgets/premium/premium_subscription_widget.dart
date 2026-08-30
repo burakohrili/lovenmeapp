@@ -7,6 +7,7 @@ import '../../../core/services/iap_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../payment/universal_payment_button.dart';
 import 'subscription_disclosure_widget.dart';
+import '../../../core/services/analytics_service.dart';
 
 class PremiumSubscriptionWidget extends StatefulWidget {
   final Function(PremiumSubscriptionType)? onPurchaseSuccess;
@@ -37,6 +38,7 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.premiumViewed('subscription_sheet');
     // Önce sabit fiyatlarla başlat
     _packages = [
       PremiumPackage.fromType(PremiumSubscriptionType.weekly),
@@ -562,12 +564,13 @@ class _PremiumSubscriptionWidgetState extends State<PremiumSubscriptionWidget> {
       description: selectedPackage.subtitle,
       duration: selectedPackage.duration,
       isPopular: selectedPackage.isRecommended,
+      // Var olmayan özellikleri satan eski liste kaldırıldı.
       features: [
         selectedPackage.subtitle,
-        'Premium özellikler',
-        'Daha fazla bağlantı isteği',
-        'Check-in yapanların profillerini gör',
-        'Check-in yapmadan kişileri görebilme',
+        'Sınırsız bağlantı isteği',
+        'Tüm check-in geçmişin',
+        'Karşılaşma geçmişi',
+        'Seri koruması',
       ],
     );
 

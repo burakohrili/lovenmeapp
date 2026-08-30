@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 // lib/core/services/notification_service.dart
 
 import 'dart:async';
@@ -123,8 +124,8 @@ class NotificationService {
     if (Platform.isAndroid) {
       const androidChannel = AndroidNotificationChannel(
         'lovenme_channel',
-        'LoveNMe Notifications',
-        description: 'Notifications for LoveNMe app',
+        'LoveNMe Bildirimleri',
+        description: 'LoveNMe bildirimleri',
         importance: Importance.high,
         enableVibration: true,
         enableLights: true,
@@ -249,8 +250,8 @@ class NotificationService {
     try {
       const androidDetails = AndroidNotificationDetails(
         'lovenme_channel',
-        'LoveNMe Notifications',
-        channelDescription: 'Notifications for LoveNMe app',
+        'LoveNMe Bildirimleri',
+        channelDescription: 'LoveNMe bildirimleri',
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
@@ -291,8 +292,30 @@ class NotificationService {
   }
 
   /// Push notification navigation
+  /// Bildirime dokununca nereye gidilecegi.
+  ///
+  /// Bu metot BOS bir govdeydi: FCM yuku `chatId`, `venueId` gibi alanlar
+  /// tasiyor ama dokunma hicbir yere goturmuyordu. Derin baglanti altyapisi
+  /// (adlandirilmis rota / global navigator) kurulmadan tam yonlendirme
+  /// yapilamaz; en azindan hedef artik kaydediliyor ve uygulama acilisinda
+  /// okunabiliyor.
   void _handleNotificationNavigation(RemoteMessage message) {
+    try {
+      final data = message.data;
+      pendingNavigationTarget = {
+        'type': (data['type'] ?? '').toString(),
+        'chatId': (data['chatId'] ?? '').toString(),
+        'venueId': (data['venueId'] ?? '').toString(),
+        'senderId': (data['senderId'] ?? '').toString(),
+      };
+    } catch (e) {
+      debugPrint('Bildirim yonlendirme verisi okunamadi: $e');
+    }
   }
+
+  /// Bildirimden gelen ve henuz islenmemis yonlendirme hedefi.
+  /// Ana ekran acilirken okunup temizlenir.
+  static Map<String, String>? pendingNavigationTarget;
 
   /// Kullanıcıya bildirim gönder
   Future<void> sendNotificationToUser({

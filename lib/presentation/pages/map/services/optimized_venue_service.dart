@@ -392,6 +392,10 @@ class OptimizedVenueService {
               'longitude': place['geometry']?['location']?['lng'] ?? location.longitude,
               'type': category,
               'closingTime': null, // Legacy API doesn't provide detailed opening hours
+              // Eski API yedeği `photo_reference` alanını tamamen yok
+              // sayıyordu; bu yoldan gelen mekanlar fotoğrafsız kalıyor ve
+              // Firestore'a fotoğrafsız yazılıyordu.
+              'photos': _legacyPhotoUrls(place),
             };
             
             venues.add(Venue.fromPlaceData(venueData));
@@ -520,8 +524,15 @@ class OptimizedVenueService {
       
       
       return {
-        'openingTime': openingTime ?? '07:00',  // Default opening time
-        'closingTime': closingTime ?? '02:00'   // Default closing time
+        'openingTime': openingTime ?? '07:00',
+        'closingTime': closingTime ?? '02:00',
+        // HAFTALIK PROGRAM: `periods` dizisi eskiden tamamen atiliyordu;
+        // geriye yalnizca BUGUNUN acilis/kapanis saati kaliyordu. Kampanyalarin
+        // "bos saat" penceresi ve gun bazli kapanis temizligi icin haftalik
+        // program gerekiyor. (Google, "popular times"i resmi API'de vermiyor;
+        // bu yuzden bos saati mekana beyan ettiriyoruz, ama gercek calisma
+        // saatleri elimizde olmali.)
+        'openingPeriods': openingHours['periods'],
       };
       
     } catch (e) {
@@ -545,6 +556,23 @@ class OptimizedVenueService {
     try {
       await VenueCacheService.clearCache();
     } catch (e) {
+    }
+  }
+
+  /// Eski Places API yanitindaki photo_reference degerlerinden medya URL'i uretir.
+  static List<String> _legacyPhotoUrls(dynamic place) {
+    try {
+      final photos = place['photos'];
+      if (photos is! List || photos.isEmpty) return const [];
+      final apiKey = ApiKeys.googlePlacesApiKey;
+      return photos.take(5).map<String>((photo) {
+        final ref = photo is Map ? photo['photo_reference'] : null;
+        if (ref == null || ref.toString().isEmpty) return '';
+        return 'https://maps.googleapis.com/maps/api/place/photo'
+            '?maxwidth=800&photoreference=$ref&key=$apiKey';
+      }).where((u) => u.isNotEmpty).toList();
+    } catch (_) {
+      return const [];
     }
   }
 }

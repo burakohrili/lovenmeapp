@@ -202,23 +202,17 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
       });
       
       // Cinsiyet-nötr tercih (Apple 4.3 uyumu)
-      List<String> matchPreferences = ['Erkek', 'Kadın', 'Diğer'];
 
-      // Kayıt tamamlandığında çağrılacak:
-      final userProfile = ref.read(userProfileProvider);
-      if (userProfile.favoriteVenueDetails.isNotEmpty) {
-        await ref.read(userProfileProvider.notifier)
-            .saveFavoriteVenuesWithCheckIn(userProfile.favoriteVenueDetails);
-      }
+      // ÇİFT YAZIM KALDIRILDI (30.08.2026):
+      // Favori mekanlar Adım 4'te zaten kaydediliyor (step4:804). Burada
+      // ikinci kez çağrılınca `favorite_venue_history` kayıtları .add() ile
+      // tekrar yazılıyordu (venues dokümanı merge ile dedupe oluyor ama
+      // geçmiş kayıtları olmuyordu). Bu, kâşif rozetlerini ve mekan
+      // sıralamasını besleyen veriyi şişiriyordu.
       
       // Yaş aralığı tercihleri (varsayılan)
-      Map<String, int> agePreferences = {
-        'minAge': 18,
-        'maxAge': 55,
-      };
       
       // Konum tercihleri (varsayılan - km cinsinden)
-      int maxDistance = 50;
       
       // Bio oluştur (eğer yoksa)
       String bio = profile.bio ?? '';
@@ -227,13 +221,17 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
       }
       
       // Firestore'a TÜM profil bilgilerini kaydet
+      // NOT: Asagidaki alanlar KALDIRILDI cunku yaziliyor ama hicbir kod
+      // tarafindan okunmuyorlardi (olu veri): matchPreferences,
+      // agePreferences, maxDistance, showMe, fullName, photoCount,
+      // hobbyCount, venueCount, profileCompletedAt, achievements,
+      // appVersion (sabit '1.0.0' yaziliyordu), deviceToken (hep null).
       final userData = {
         // Temel bilgiler
         'uid': user.uid,
         'email': user.email ?? profile.email ?? '',
         'name': profile.name ?? '',
         'surname': profile.surname ?? '',
-        'fullName': '${profile.name ?? ''} ${profile.surname ?? ''}',
         'age': profile.age ?? 18,
         'gender': profile.gender ?? 'Belirtilmemiş',
         'bio': bio,
@@ -241,11 +239,9 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         // Fotoğraflar (Firebase Storage URL'leri)
         'photos': photoUrls,
         'mainPhoto': photoUrls.isNotEmpty ? photoUrls.first : '',
-        'photoCount': photoUrls.length,
         
         // Hobiler
         'hobbies': profile.hobbies,
-        'hobbyCount': profile.hobbies.length,
         
         // Favori mekanlar
         'favoriteVenues': profile.favoriteVenues,
@@ -258,7 +254,6 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
           'longitude': venue['longitude'] ?? 0.0,
           'vicinity': venue['vicinity'] ?? '',
         }).toList(),
-        'venueCount': profile.favoriteVenues.length,
         
         // İletişim bilgileri
         'phone': profile.phone ?? '',
@@ -266,14 +261,9 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         'isPhoneVerified': profile.isPhoneVerified,
         
         // Eşleşme tercihleri
-        'matchPreferences': matchPreferences,
-        'agePreferences': agePreferences,
-        'maxDistance': maxDistance,
-        'showMe': true, // Keşfette göster
         
         // Profil durumu
         'isProfileComplete': true,
-        'profileCompletedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
         'lastActive': FieldValue.serverTimestamp(),
@@ -285,17 +275,34 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         // Premium ve limitler
         'isPremium': false,
         'premiumUntil': null,
-        'dailyLikesRemaining': 5,
-        'dailyLikesResetAt': DateTime.now().add(const Duration(days: 1)).toIso8601String(),
-        'superLikesRemaining': 0,
-        'dailyRewindsRemaining': 0,
+        // KRİTİK: Bu alan eskiden HİÇ yazılmıyordu. ChatRequestService
+        // `?? 0` okuyup reddettiği için yeni kullanıcı ilk bağlantı
+        // isteğinde "Günlük Limitiniz Doldu" alıyordu — hiç mesaj
+        // gönderemiyordu.
+        'dailyChatRequestsRemaining': 5,
+        'superChatsRemaining': 0,
+        // Sunucudaki günlük sıfırlama bu alanı okuyor.
+        'isActive': true,
+        // NOT: dailyLikesRemaining / superLikesRemaining /
+        // dailyRewindsRemaining kaldırıldı — beğeni ve geri alma
+        // sistemleri kaldırıldı, bu alanları hiçbir kod okumuyordu.
         
         // İstatistikler
-        'totalLikes': 0,
-        'totalMatches': 0,
         'totalCheckIns': 0,
-        'profileViews': 0,
         
+        // Bildirim tercihleri ÜST DÜZEY alanlar olarak da yazılır.
+        // Sunucudaki handleNotificationRequest üst düzey `notifications`,
+        // `matchNotifications`, `messageNotifications` alanlarını okuyor;
+        // buradan yalnızca iç içe `settings` haritası yazıldığı için,
+        // ayarlara hiç girmemiş kullanıcıda tercih YOK SAYILIYOR ve her şey
+        // gönderiliyordu.
+        'mapVisibility': true,
+        'profileActive': true,
+        'notifications': true,
+        'matchNotifications': true,
+        'messageNotifications': true,
+        'shareActivityWithFriends': true,
+
         // Ayarlar
         'settings': {
           'mapVisibility': true,
@@ -312,7 +319,6 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         
         // Rozetler ve başarımlar
         'badges': [],
-        'achievements': [],
         
         // Engellenen kullanıcılar
         'blockedUsers': [],
@@ -324,15 +330,19 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         
         // Platform bilgileri
         'platform': 'mobile',
-        'appVersion': '1.0.0',
-        'deviceToken': null, // FCM token için
       };
       
-      // Firestore'a kaydet (set ile override yap)
+      // KRİTİK: merge:true.
+      // Eskiden merge:false idi, yani TÜM doküman üzerine yazılıyordu.
+      // Bu, kayıt sırasında oluşmuş şu alanları siliyordu: diamonds,
+      // diamondCount, isPremium/premiumUntil (satın alma yapmışsa),
+      // blockedUsers (engelleme listesi!), isActive, fcmToken.
+      // Splash, isProfileComplete false olan kullanıcıyı buraya tekrar
+      // yönlendirebildiği için bu, gerçek veri kaybıydı.
       await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .set(userData, SetOptions(merge: false));
+        .set(userData, SetOptions(merge: true));
       
       
       // Kullanıcı istatistiklerini başlat
@@ -374,7 +384,13 @@ class _ProfileSetupStep7PageState extends ConsumerState<ProfileSetupStep7Page> {
         // );
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const HomePage(initialIndex: 2),),
+                    // Kayıt sonrası HARİTA açılır (index 1).
+          // Eskiden index 2 (Akış) açılıyordu: yeni kullanıcının ve App Store
+          // reviewer'ının gördüğü İLK ekran, uygulamanın en boş sekmesiydi.
+          // Ayrıca sonraki açılışlarda Harita geliyordu; ilk oturum tutarsızdı.
+          MaterialPageRoute(
+            builder: (context) => const HomePage(initialIndex: 1),
+          ),
           (route) => false, // Tüm önceki sayfaları sil
         );
       }

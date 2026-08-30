@@ -63,7 +63,8 @@ class VenueService {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'places.id,places.name,places.displayName,places.location,places.rating,places.formattedAddress,places.types,places.regularOpeningHours',
+          // places.photos eksikti: bu yoldan gelen mekanlarin HIC fotografi olmuyordu.
+          'X-Goog-FieldMask': 'places.id,places.name,places.displayName,places.location,places.rating,places.formattedAddress,places.types,places.regularOpeningHours,places.photos',
         },
         body: jsonEncode(requestBody),
       ).timeout(const Duration(seconds: 10));

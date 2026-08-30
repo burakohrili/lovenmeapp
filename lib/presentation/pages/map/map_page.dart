@@ -54,6 +54,8 @@ import '../../models/venue.dart';
 // Utils
 import 'utils/map_styles.dart';
 import '../../widgets/checkin_reward_sheet.dart';
+import '../../../core/services/gamification_service.dart';
+import '../../../core/services/quest_service.dart';
 
 class MapPage extends ConsumerStatefulWidget {
   const MapPage({super.key});
@@ -108,6 +110,16 @@ class _MapPageState extends ConsumerState<MapPage>
   bool _isDisposed = false; // Dispose tracking
   bool _isInitialLoad = true; // Navigation tracking
   bool _isVenueDetailsOpen = false; // Prevent multiple venue detail sheets
+  /// Açık mekan sayfasının kendi setState'i; route ile birlikte yaşar.
+  StateSetter? _venueSheetSetState;
+  /// didChangeDependencies fırtınasını sınırlamak için.
+  DateTime? _lastMayorRefresh;
+  /// Son check-in ile tamamlanan gorevler (kutlama paneli icin).
+  List<Quest> _pendingCompletedQuests = const [];
+  /// Kutlama paneli, check-in diyaloğu TAMAMEN kapandıktan sonra açılır.
+  CheckInReward? _pendingCheckInReward;
+  /// Sıralama yalnızca başarılı check-in'de yeniden yüklensin diye sayaç.
+  int _venueLeaderboardToken = 0;
 
   // Performance constants
   static const double _maxDistance = 200.0; // 200m max for all venues
@@ -185,6 +197,7 @@ class _MapPageState extends ConsumerState<MapPage>
   void dispose() {
     _isDisposed = true; // Set disposal flag first
     _isVenueDetailsOpen = false; // Reset venue details flag
+    _venueSheetSetState = null;
     WidgetsBinding.instance.removeObserver(this); // Observer'ı temizle
     _searchFocusNode.dispose(); // Genel focus node'u temizle
     _diamondBalanceSubscription?.cancel();
@@ -215,6 +228,8 @@ class _MapPageState extends ConsumerState<MapPage>
       }
 
       if (mounted) setState(() {});
+      // Bekleme süresi sayacı açık mekan sayfasında da işlesin.
+      _rebuildVenueSheet();
     } catch (e) {}
   }
 
@@ -530,9 +545,20 @@ class _MapPageState extends ConsumerState<MapPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Bu method page'e her geri döndüğünde çalışır
+    // DİKKAT: Bu metot yalnızca sayfaya geri dönüldüğünde DEĞİL, her
+    // bağımlılık değişiminde çalışır — klavye açılıp kapanması, ekran
+    // döndürme, tema değişimi, MediaQuery değişimi... Eskiden her birinde
+    // TÜM muhtar verisi yeniden çekiliyor, sıralı 200 ms gecikmeli
+    // Firestore okumaları yapılıyor ve marker'lar baştan çiziliyordu.
+    // Artık en fazla dakikada bir tazeleniyor.
     if (!_isInitialLoad) {
-      _forceRefreshCurrentUserMayorships();
+      final now = DateTime.now();
+      final last = _lastMayorRefresh;
+      if (last == null ||
+          now.difference(last) > const Duration(minutes: 1)) {
+        _lastMayorRefresh = now;
+        _forceRefreshCurrentUserMayorships();
+      }
     }
     _isInitialLoad = false;
   }
@@ -1694,15 +1720,17 @@ class _MapPageState extends ConsumerState<MapPage>
   }
 
   // Zoom seviyesine göre radius hesapla
+  /// Zoom seviyesine göre arama yarıçapı (metre).
+  ///
+  /// Eskiden sekiz dalın HEPSİ 200.0 döndürüyordu; yani "zoom'a duyarlı
+  /// yükleme" diye bir şey aslında yoktu, uzaklaşınca da 200 m'lik alan
+  /// taranıyordu. Artık gerçekten ölçekleniyor (Places maliyeti de buna
+  /// bağlı olduğu için üst sınır ölçülü tutuldu).
   double _getRadiusForZoom(double zoom) {
-    if (zoom >= 18.0) return 200.0; // 200m - Maksimum radius
-    if (zoom >= 17.0) return 200.0; // 200m
-    if (zoom >= 16.0) return 200.0; // 200m
-    if (zoom >= 15.0) return 200.0; // 200m
-    if (zoom >= 14.0) return 200.0; // 200m
-    if (zoom >= 13.0) return 200.0; // 200m
-    if (zoom >= 12.0) return 200.0; // 200m
-    return 200.0; // 200m - Tüm zoom seviyelerinde
+    if (zoom >= 17.0) return 200.0;
+    if (zoom >= 15.0) return 400.0;
+    if (zoom >= 13.0) return 800.0;
+    return 1500.0;
   }
 
   // Bölge anahtarı oluştur (grid sistemi)
@@ -1823,17 +1851,23 @@ class _MapPageState extends ConsumerState<MapPage>
     } catch (e) {}
   }
 
+  /// Tile boyutu — hem anahtar üretimi hem çözümü BURAYI kullanır.
+  double _tileSizeForZoom() {
+    if (_currentZoom >= 16) return 0.004;
+    if (_currentZoom >= 14) return 0.006;
+    if (_currentZoom >= 12) return 0.008;
+    return 0.012;
+  }
+
   List<String> _getTilesInBounds(LatLngBounds bounds) {
     // 60 venue hedefi için optimize edilmiş tile boyutları (200m radius içinde 3-4 tile)
-    final tileSize = _currentZoom >= 16
-        ? 0.004
-        : // Orta boyut tile'lar - 3-4 tile ile 60 venue
-        _currentZoom >= 14
-            ? 0.006
-            : // Büyük tile'lar
-            _currentZoom >= 12
-                ? 0.008
-                : 0.012; // Çok büyük tile'lar
+    // TEK KAYNAK: tile boyutu artık _tileSizeForZoom() ile hesaplanıyor.
+    // Eskiden anahtar ÜRETİLİRKEN {0.004, 0.006, 0.008, 0.012},
+    // ÇÖZÜLÜRKEN {0.01, 0.02, 0.04, 0.08} kullanılıyordu; iki tablo hiç
+    // uyuşmuyordu. Yani bir anahtardan geri hesaplanan koordinat 2.5 kat
+    // kayıyordu ve mekan yükleme coğrafi olarak yanlış yerlere bakıyordu.
+    // Yalnızca 200 m filtresi sayesinde fark edilmiyordu.
+    final tileSize = _tileSizeForZoom();
 
     List<String> tiles = [];
 
@@ -1883,13 +1917,7 @@ class _MapPageState extends ConsumerState<MapPage>
     final latTile = int.parse(parts[0]);
     final lngTile = int.parse(parts[1]);
 
-    final tileSize = _currentZoom >= 16
-        ? 0.01
-        : _currentZoom >= 14
-            ? 0.02
-            : _currentZoom >= 12
-                ? 0.04
-                : 0.08;
+    final tileSize = _tileSizeForZoom();
 
     return LatLngBounds(
       southwest: LatLng(latTile * tileSize, lngTile * tileSize),
@@ -2119,13 +2147,20 @@ class _MapPageState extends ConsumerState<MapPage>
       // 🚀 ULTRA-FAST BATCH PROCESSING: Parallel loading of venues and check-ins
 
       // ⚡ PARALLEL EXECUTION: Load venue data and check-ins simultaneously
-      final futures = await Future.wait([
+      await Future.wait([
         _loadVenueBatch(venues),
         _loadCheckInBatch(venues),
       ]);
 
       if (_isDisposed) return;
-    } catch (e) {}
+
+      // Fotoğrafı olmayan mevcut kayıtları Places verisiyle tamamla.
+      // (Yeni mekan oluşturma yolu yalnızca HİÇ olmayan kayıtlar için
+      //  çalıştığından, eski fotoğrafsız kayıtlar aksi halde öyle kalırdı.)
+      await _backfillVenuePhotos(venues);
+    } catch (e) {
+      debugPrint('Mekan verisi yuklenemedi: $e');
+    }
   }
 
   Future<void> _loadVenueBatch(List<Venue> venues) async {
@@ -2330,6 +2365,8 @@ class _MapPageState extends ConsumerState<MapPage>
       _safeSetState(() {
         _updateMapMarkers();
       });
+      // Açık mekan sayfasındaki muhtar kartı da tazelensin.
+      _rebuildVenueSheet();
     } catch (e) {}
   }
 
@@ -2355,22 +2392,20 @@ class _MapPageState extends ConsumerState<MapPage>
       // UI'ı güncelle
       if (mounted) {
         setState(() {});
+      // Açık mekan sayfası da yerinde tazelensin.
+      _rebuildVenueSheet();
       }
     } catch (e) {}
   }
 
   Future<void> _createVenueInFirebase(Venue venue) async {
     try {
-      // Venue'nun fotoğraflarını al (eğer varsa)
-      List<String> photoUrls = [];
-      if (venue.photos.isNotEmpty) {
-        photoUrls = venue.photos;
-      }
+      final List<String> photoUrls =
+          venue.photos.where((p) => p.trim().isNotEmpty).toList();
 
-      // Kategori bazlı varsayılan features
-      List<String> defaultFeatures = _getDefaultFeatures(venue.category);
+      final List<String> defaultFeatures = _getDefaultFeatures(venue.category);
 
-      await _firestore.collection('venues').doc(venue.id).set({
+      final data = <String, dynamic>{
         'placeId': venue.placeId,
         'place_id': venue.placeId, // Compatibility field
         'name': venue.name,
@@ -2383,31 +2418,84 @@ class _MapPageState extends ConsumerState<MapPage>
         'createdAt': FieldValue.serverTimestamp(),
         'closingTime': venue.closingTime ?? '02:00',
         'openingTime': venue.openingTime ?? '08:00',
-        // Fotoğraf alanları
-        'photos': photoUrls,
-        'photoUrl': photoUrls.isNotEmpty ? photoUrls[0] : null,
-        // Varsayılan features
+        // Haftalik program (kampanya "bos saat" penceresi icin).
         'features': defaultFeatures,
-        // Sponsor bilgileri
-        'isSponsored': venue.isSponsored,
-        'sponsorLogoUrl': venue.sponsorLogoUrl,
-        'sponsorBadgeText': venue.sponsorBadgeText,
-      }, SetOptions(merge: true)); // Merge kullan, mevcut data'yı ezmemek için
+      };
+
+      // FOTOĞRAF: yalnızca elimizde gerçekten fotoğraf VARSA yaz.
+      // Eskiden boş liste de yazılıyordu ve `SetOptions(merge: true)` ile
+      // birlikte bu, daha önce kaydedilmiş İYİ fotoğrafların üzerine boş
+      // liste geçirebiliyordu — mekan bir kez fotoğrafsız görülünce
+      // fotoğrafını kalıcı olarak kaybediyordu.
+      if (photoUrls.isNotEmpty) {
+        data['photos'] = photoUrls;
+        data['photoUrl'] = photoUrls.first;
+      }
+
+      // SPONSORLUK: istemci bu alanlara ASLA yazmaz. Firestore kuralları da
+      // engelliyor; burada göndermek yazının tamamen reddedilmesine yol açardı.
+      // Sponsorluk yalnızca Admin SDK / yönetim paneli tarafından verilir.
+
+      await _firestore
+          .collection('venues')
+          .doc(venue.id)
+          .set(data, SetOptions(merge: true));
+
+      // Bellek önbelleği: fotoğraf yoksa mevcut değeri koru.
+      final cached = _globalVenueCache[venue.id];
+      final cachedPhotos =
+          (cached?['photos'] as List?)?.cast<String>() ?? const <String>[];
+      final effectivePhotos = photoUrls.isNotEmpty ? photoUrls : cachedPhotos;
 
       _globalVenueCache[venue.id] = {
+        ...?cached,
         'placeId': venue.placeId,
         'name': venue.name,
         'category': venue.category,
         'closingTime': venue.closingTime ?? '02:00',
         'openingTime': venue.openingTime ?? '08:00',
-        'photos': photoUrls,
-        'photoUrl': photoUrls.isNotEmpty ? photoUrls[0] : null,
+        'photos': effectivePhotos,
+        'photoUrl': effectivePhotos.isNotEmpty ? effectivePhotos.first : null,
         'features': defaultFeatures,
       };
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Mekan kaydi olusturulamadi (${venue.id}): $e');
+    }
   }
 
-  // Kategori bazlı varsayılan features
+  /// Fotoğrafı olmayan mevcut mekan kayıtlarını geri doldurur.
+  ///
+  /// `_createVenueInFirebase` yalnızca Firestore'da HİÇ olmayan mekanlar için
+  /// çalışıyor; dolayısıyla fotoğrafsız oluşturulmuş eski kayıtlar sonsuza dek
+  /// fotoğrafsız kalıyordu. Places\'ten fotoğraf geldiğinde eksik olanı
+  /// tamamlıyoruz.
+  Future<void> _backfillVenuePhotos(List<Venue> venues) async {
+    for (final venue in venues) {
+      final photos = venue.photos.where((p) => p.trim().isNotEmpty).toList();
+      if (photos.isEmpty) continue;
+
+      final cached = _globalVenueCache[venue.id];
+      final cachedPhotos =
+          (cached?['photos'] as List?)?.cast<String>() ?? const <String>[];
+      if (cachedPhotos.isNotEmpty) continue; // zaten fotoğrafı var
+
+      try {
+        await _firestore.collection('venues').doc(venue.id).set({
+          'photos': photos,
+          'photoUrl': photos.first,
+        }, SetOptions(merge: true));
+
+        _globalVenueCache[venue.id] = {
+          ...?cached,
+          'photos': photos,
+          'photoUrl': photos.first,
+        };
+      } catch (e) {
+        debugPrint('Foto geri doldurma basarisiz (${venue.id}): $e');
+      }
+    }
+  }
+
   List<String> _getDefaultFeatures(String category) {
     switch (category.toLowerCase()) {
       case 'cafe':
@@ -2643,12 +2731,33 @@ class _MapPageState extends ConsumerState<MapPage>
         },
       ),
     ).then((_) {
-      // Dialog kapatıldığında her durumda loading state'i reset et
+      // Diyalog kapandığında loading state her durumda sıfırlanır.
       if (mounted) {
         setState(() {
           _isCheckingIn = false;
         });
-      } else {}
+      }
+
+      // Açık mekan sayfasındaki buton spinner'ı da temizlensin.
+      _rebuildVenueSheet();
+
+      // KUTLAMA BURADA: diyalog route'u TAMAMEN kapandıktan sonra.
+      // Eskiden check-in fonksiyonunun içinde gösteriliyordu; diyalog kendini
+      // hemen ardından kapattığı için o pop çoğu zaman kutlama panelini
+      // yiyordu ("kutlama bir anlığına görünüp kayboluyor").
+      final reward = _pendingCheckInReward;
+      final quests = _pendingCompletedQuests;
+      _pendingCheckInReward = null;
+      _pendingCompletedQuests = const [];
+      if ((reward != null || quests.isNotEmpty) && mounted && !_isDisposed) {
+        // Güncellenmiş mekan sayfasının ÜSTÜNDE açılır.
+        CheckInRewardSheet.showIfAny(
+          context,
+          reward: reward,
+          venueName: venue.name,
+          completedQuests: quests,
+        );
+      }
     });
   }
 
@@ -2661,19 +2770,33 @@ class _MapPageState extends ConsumerState<MapPage>
           venue, _userCheckedInVenues,
           currentPosition: currentPos);
 
+      if (!mounted || _isDisposed) return;
+
       if (success) {
-        // 🚀 REAL-TIME GÜNCELLEME: Check-in sonrası tüm veriyi refresh et (FORCE REFRESH)
         await _refreshVenueCheckInData(venue.id);
         await _refreshMayorAndCheckInData(forceRefresh: true);
-        _refreshCooldownAfterCheckIn(); // 🕐 Cooldown'ı yenile
+        _refreshCooldownAfterCheckIn();
 
-        // 🔄 CHECK-IN SUCCESS: Close all open sheets first
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop(); // Close venue details sheet
-        }
-        _isVenueDetailsOpen = false; // Reset flag
+        if (!mounted || _isDisposed) return;
 
-        // Check-in başarılı mesajı göster
+        // NAVİGASYON KURALI: sayfa, kendi push etmediği route'u pop etmez.
+        // Burada eskiden "venue sheet'i kapat" diye Navigator.pop çağrılıyordu
+        // ama o an EN ÜSTTEKİ route check-in diyaloğuydu; diyalog kendini bir
+        // kez daha kapattığı için ikinci pop çoğu zaman kutlama panelini
+        // yiyordu. Diyalog kendini _CheckInDialogWidget içinde kapatıyor.
+
+        // Sıralama yalnızca gerçek bir check-in'de yeniden yüklensin.
+        _venueLeaderboardToken++;
+
+        // Kutlama, diyalog route'u tamamen kapandıktan sonra gösterilir
+        // (_showCheckInDialog'un .then geri çağrısında).
+        _pendingCheckInReward = _checkInService.lastCheckInReward;
+        _pendingCompletedQuests = _checkInService.lastCompletedQuests;
+
+        // Açık mekan sayfası yerinde güncellensin: topluluk açılır,
+        // "N kişi burada" görünür, muhtar kartı gelir, buton değişir.
+        _rebuildVenueSheet();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${venue.name} mekanına check-in yaptınız!'),
@@ -2683,26 +2806,9 @@ class _MapPageState extends ConsumerState<MapPage>
             duration: const Duration(seconds: 2),
           ),
         );
-
-        // 🎮 Kazanılan ilerlemeyi kutla (seri / seviye / rozet)
-        CheckInRewardSheet.showIfAny(
-          context,
-          reward: _checkInService.lastCheckInReward,
-          venueName: venue.name,
-        );
-
-        // ❌ DON'T REOPEN: Let user manually open venue details if needed
-        // Future.delayed(const Duration(milliseconds: 500), () {
-        //   if (!_isDisposed && mounted) {
-        //     _showVenueDetails(venue);
-        //   }
-        // });
       } else {
-        // 🔄 CHECK-IN FAILED: Close sheets on failure too
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop(); // Close venue details sheet
-        }
-        _isVenueDetailsOpen = false; // Reset flag
+        // Başarısızlıkta sayfa AÇIK KALIR; yalnızca buton eski hâline döner.
+        _rebuildVenueSheet();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -2714,11 +2820,8 @@ class _MapPageState extends ConsumerState<MapPage>
         );
       }
     } catch (e) {
-      // 🔄 CHECK-IN ERROR: Close sheets on error too
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(); // Close venue details sheet
-      }
-      _isVenueDetailsOpen = false; // Reset flag
+      if (!mounted || _isDisposed) return;
+      _rebuildVenueSheet();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2732,32 +2835,44 @@ class _MapPageState extends ConsumerState<MapPage>
   }
 
   Future<void> _performCheckInWithPhoto(Venue venue) async {
+    // Yükleniyor diyaloğu için TEK SEFERLİK, idempotent kapatıcı.
+    // Eskiden iç catch pop edip rethrow ediyor, dış catch bir kez daha pop
+    // ediyordu; ikinci pop mekan sayfasını yiyordu.
+    final loadingNav = Navigator.of(context, rootNavigator: true);
+    bool loadingOpen = false;
+    void closeLoading() {
+      if (!loadingOpen) return;
+      loadingOpen = false;
+      loadingNav.pop();
+    }
+
     try {
       final user = _auth.currentUser;
       if (user == null) {
         return;
       }
 
-      // Direkt kamera aç ve crop et (izin kontrolü ImagePickerService içinde)
       final File? croppedImage =
           await _checkInService.selectImageFromCamera(context);
 
       if (croppedImage == null) {
-        // Kullanıcı iptal ettiğinde veya izin sorunu olduğunda popup'lar CheckinService içinde gösterilir
+        // Kullanıcı iptal etti; hiçbir route'a dokunmuyoruz.
         return;
       }
 
-      // Loading göster
+      if (!mounted || _isDisposed) return;
+
+      loadingOpen = true;
       showDialog(
         context: context,
         barrierDismissible: false,
+        useRootNavigator: true,
         builder: (context) => const Center(
           child: CircularProgressIndicator(),
         ),
       );
 
       try {
-        // CheckInService ile fotoğraflı check-in yap
         final currentPos = _currentPosition != null
             ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
             : null;
@@ -2766,21 +2881,20 @@ class _MapPageState extends ConsumerState<MapPage>
             currentPosition: currentPos);
 
         if (success) {
-          // 🚀 REAL-TIME GÜNCELLEME: Fotoğraflı check-in sonrası tüm veriyi refresh et (FORCE REFRESH)
           await _refreshVenueCheckInData(venue.id);
           await _refreshMayorAndCheckInData(forceRefresh: true);
-          _refreshCooldownAfterCheckIn(); // 🕐 Cooldown'ı yenile
+          _refreshCooldownAfterCheckIn();
 
-          // Loading'i kapat
-          Navigator.pop(context);
+          closeLoading();
 
-          // 🔄 PHOTO CHECK-IN SUCCESS: Close all open sheets first
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop(); // Close venue details sheet
-          }
-          _isVenueDetailsOpen = false; // Reset flag
+          if (!mounted || _isDisposed) return;
 
-          // Success message
+          _venueLeaderboardToken++;
+          _pendingCheckInReward = _checkInService.lastCheckInReward;
+          _pendingCompletedQuests = _checkInService.lastCompletedQuests;
+        _pendingCompletedQuests = _checkInService.lastCompletedQuests;
+          _rebuildVenueSheet();
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content:
@@ -2791,29 +2905,11 @@ class _MapPageState extends ConsumerState<MapPage>
               duration: const Duration(seconds: 2),
             ),
           );
-
-          // 🎮 Kazanılan ilerlemeyi kutla (seri / seviye / rozet)
-          CheckInRewardSheet.showIfAny(
-            context,
-            reward: _checkInService.lastCheckInReward,
-            venueName: venue.name,
-          );
-
-          // ❌ DON'T REOPEN: Let user manually open venue details if needed
-          // Future.delayed(const Duration(milliseconds: 500), () {
-          //   if (!_isDisposed && mounted) {
-          //     _showVenueDetails(venue);
-          //   }
-          // });
         } else {
-          // Loading'i kapat
-          Navigator.pop(context);
+          closeLoading();
+          if (!mounted || _isDisposed) return;
 
-          // 🔄 PHOTO CHECK-IN FAILED: Close sheets on failure too
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop(); // Close venue details sheet
-          }
-          _isVenueDetailsOpen = false; // Reset flag
+          _rebuildVenueSheet();
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -2825,16 +2921,14 @@ class _MapPageState extends ConsumerState<MapPage>
           );
         }
       } catch (e) {
-        // Loading'i kapat
-        Navigator.pop(context);
+        closeLoading();
         rethrow;
       }
     } catch (e) {
-      // 🔄 PHOTO CHECK-IN ERROR: Close sheets on error too
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(); // Close venue details sheet if open
-      }
-      _isVenueDetailsOpen = false; // Reset flag
+      closeLoading(); // idempotent: yukarıda kapandıysa hiçbir şey yapmaz
+      if (!mounted || _isDisposed) return;
+
+      _rebuildVenueSheet();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -3178,7 +3272,7 @@ class _MapPageState extends ConsumerState<MapPage>
                     children: [
                       Icon(Icons.flash_on, size: 16),
                       SizedBox(width: 4),
-                      Text('BUY NOW'),
+                      Text('HEMEN AL'),
                     ],
                   ),
                 ),
@@ -3501,36 +3595,43 @@ class _MapPageState extends ConsumerState<MapPage>
   // REMOVED: Like animation widgets no longer needed with Chat Request system
 
   void _showVenueDetails(Venue venue) async {
-    // 🚫 PREVENT MULTIPLE SHEETS: If a venue details sheet is already open, ignore
+    // 🚫 Aynı anda birden fazla mekan sayfası açılmasın.
     if (_isVenueDetailsOpen) {
       return;
     }
 
-    _isVenueDetailsOpen = true; // Mark as open
+    _isVenueDetailsOpen = true;
 
-    // � FRESH DATA: Load latest check-in data when opening venue details
-    await _refreshVenueCheckInData(venue.id);
-
-    // �🕐 SAFETY TIMEOUT: Reset flag after 30 seconds in case something goes wrong
-    Timer(const Duration(seconds: 30), () {
-      if (_isVenueDetailsOpen) {
+    // Bayrağın sonsuza dek "açık" kalmaması için await'ler korumalı.
+    // (Eskiden burada 30 saniyelik bir "güvenlik sayacı" vardı; sheet hâlâ
+    // açıkken bayrağı false yapıyordu, dolayısıyla 30 sn'den uzun kalan
+    // kullanıcı başka bir markera dokununca üst üste İKİ sayfa açılıyordu.)
+    try {
+      await _refreshVenueCheckInData(venue.id);
+      if (!mounted || _isDisposed) {
         _isVenueDetailsOpen = false;
+        return;
       }
-    });
+      await _loadCheckInCooldownStatus();
+      if (!mounted || _isDisposed) {
+        _isVenueDetailsOpen = false;
+        return;
+      }
+    } catch (_) {
+      _isVenueDetailsOpen = false;
+      return;
+    }
 
-    // 🕐 Venue details açılırken cooldown durumunu güncelle
-    await _loadCheckInCooldownStatus();
-
-    // Venue'nun sponsor durumunu hesapla (marker oluşturulurken kullanılan aynı logic)
+    // --- Sayfa açılışında bir kez hesaplananlar (sponsorluk) ---
+    // Bunlar bilerek StatefulBuilder'ın DIŞINDA: _isChainSponsored tüm sponsor
+    // zincirlerini tarar, her yeniden çizimde çalışmamalı.
     final cachedData = _globalVenueCache[venue.id];
     bool isSponsored = cachedData?['isSponsored'] ?? venue.isSponsored ?? false;
 
-    // ZINCIR MEKAN KONTROLÜ: Eğer individual sponsor değilse, chain kontrolü yap
     if (!isSponsored) {
       isSponsored = _isChainSponsored(venue.name);
     }
 
-    // Cache'de sponsor expiry kontrolü
     if (cachedData != null && isSponsored) {
       try {
         final endDateData = cachedData['sponsorEndDate'];
@@ -3541,8 +3642,7 @@ class _MapPageState extends ConsumerState<MapPage>
           } else if (endDateData is Timestamp) {
             endDate = endDateData.toDate();
           } else {
-            endDate = DateTime.now()
-                .add(const Duration(days: 30)); // Default fallback
+            endDate = DateTime.now().add(const Duration(days: 30));
           }
 
           if (endDate.isBefore(DateTime.now())) {
@@ -3552,67 +3652,100 @@ class _MapPageState extends ConsumerState<MapPage>
       } catch (e) {}
     }
 
-    // Venue'yu güncellenmiş sponsor durumuyla yeniden oluştur
     final updatedVenue = venue.copyWith(isSponsored: isSponsored);
-
-    final userCheckedIn = _userCheckedInVenues.contains(venue.id);
-    final hasCheckedInUsers =
-        _venueUserCounts[venue.id] != null && _venueUserCounts[venue.id]! > 0;
-    // MEVCUDİYET KAPISI: Bir mekanın topluluğunu ancak oraya gerçekten
-    // check-in yapmış kullanıcı görebilir. Premium veya sponsorluk bu kapıyı
-    // ATLAMAZ — uygulama insan taranan bir yer değil, gerçek dünyada
-    // bulunmanın karşılığında topluluğa erişilen bir yer.
-    // Premium'un değeri kapıyı atlamak değil, geçmiş derinliği görmektir.
-    final bool canSeeUsers = userCheckedIn;
-
-    // Get actual user count for this venue
-    final int actualUserCount = _venueUserCounts[venue.id] ?? 0;
-
-    // Get fresh daily mayor data for this venue - use existing cache
-    Map<String, dynamic>? dailyMayor = _dailyMayors[venue.id];
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => VenueDetailsSheet(
-        venue: updatedVenue, // Güncellenmiş venue'yu kullan
-        hasCheckedIn: hasCheckedInUsers,
-        isCheckedIn: userCheckedIn,
-        canSeeUsers: canSeeUsers,
-        isPremium: _isPremium,
-        isUpdatingFavorite: false,
-        actualUserCount: actualUserCount,
-        dailyMayor: dailyMayor,
-        userCheckedInVenues:
-            _userCheckedInVenues, // Yeni: Check-in yapılan mekanlar
-        cooldownStatus: _cooldownStatus, // 🕐 Cooldown durumu
-        isCheckingIn: _isCheckingIn, // 📍 Loading state
-        onToggleFavorite: (venue) => _toggleFavorite(venue),
-        onCheckIn: (venue) => _performCheckIn(venue),
-        onRefreshUserData: () =>
-            _refreshVenueCheckInData(venue.id), // Real-time refresh
-        onShowMayorDialog: (venue) => null,
-        onPurchaseMayorship: (venue) => _purchaseMayorshipWithDiamonds(venue),
-        onPurchaseBuyNowMayorship: (venue) =>
-            _purchaseBuyNowMayorshipWithDiamonds(venue),
-        calculateMayorshipPrice: (venueId) =>
-            _checkInService.calculateMayorshipPrice(venueId),
-        calculateBuyNowPrice: (venueId) =>
-            _checkInService.calculateBuyNowPrice(venueId),
-        onShowPurchaseDiamondsPanel: () => _showPurchaseDiamondsBottomSheet(),
-        userDiamondBalance: _userDiamondBalance,
-        getCategoryIcon: (category) => Icons.place,
-        buildCheckedInUsersList: (venue, canSee) =>
-            _buildCheckedInUsersList(venue),
-        // Chat request durumları ve callback'ler
-        sentChatRequestUserIds: _sentChatRequestUserIds,
-        onHandleChatRequest: _handleChatRequest,
+      // StatefulBuilder olmadan bu sayfa check-in'den sonra GÜNCELLENEMEZ:
+      // modal, sayfanın build ağacının dışında yaşadığı için _MapPageState'in
+      // setState'i ona ulaşmaz. Ayrıca aşağıdaki değerler eskiden burada
+      // yerel değişkene DONDURULUYORDU; artık her yeniden çizimde canlı
+      // state'ten türetiliyor.
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          // Yeniden çizimi dışarıdan tetikleyebilmek için setter'ı sakla.
+          _venueSheetSetState = setSheetState;
+
+          final userCheckedIn = _userCheckedInVenues.contains(venue.id);
+          final hasCheckedInUsers = (_venueUserCounts[venue.id] ?? 0) > 0;
+
+          // MEVCUDİYET KAPISI: Bir mekanın topluluğunu ancak oraya gerçekten
+          // check-in yapmış kullanıcı görebilir. Premium veya sponsorluk bu
+          // kapıyı ATLAMAZ — uygulama insan taranan bir yer değil, gerçek
+          // dünyada bulunmanın karşılığında topluluğa erişilen bir yer.
+          // ⚠️ Buraya `_isPremium ||` veya `|| isSponsored` EKLEMEYİN.
+          final bool canSeeUsers = userCheckedIn;
+
+          final int actualUserCount = _venueUserCounts[venue.id] ?? 0;
+          final Map<String, dynamic>? dailyMayor = _dailyMayors[venue.id];
+
+          // ⚠️ Bu çağrı const OLMAMALI ve widget'a operator== eklenmemeli:
+          // userCheckedInVenues aynı Set referansı olduğu için kimlik eşitliği
+          // yeniden çizimi kısa devre yapar ve sayfa yine donar.
+          return VenueDetailsSheet(
+            venue: updatedVenue,
+            hasCheckedIn: hasCheckedInUsers,
+            isCheckedIn: userCheckedIn,
+            canSeeUsers: canSeeUsers,
+            isPremium: _isPremium,
+            isUpdatingFavorite: false,
+            actualUserCount: actualUserCount,
+            dailyMayor: dailyMayor,
+            userCheckedInVenues: _userCheckedInVenues,
+            cooldownStatus: _cooldownStatus,
+            isCheckingIn: _isCheckingIn,
+            leaderboardRefreshToken: _venueLeaderboardToken,
+            onToggleFavorite: (v) async {
+              await _toggleFavorite(v);
+              _rebuildVenueSheet();
+            },
+            onCheckIn: (v) => _performCheckIn(v),
+            onRefreshUserData: () async {
+              await _refreshVenueCheckInData(venue.id);
+              _rebuildVenueSheet();
+            },
+            onShowMayorDialog: (venue) => null,
+            onPurchaseMayorship: (v) => _purchaseMayorshipWithDiamonds(v),
+            onPurchaseBuyNowMayorship: (v) =>
+                _purchaseBuyNowMayorshipWithDiamonds(v),
+            calculateMayorshipPrice: (venueId) =>
+                _checkInService.calculateMayorshipPrice(venueId),
+            calculateBuyNowPrice: (venueId) =>
+                _checkInService.calculateBuyNowPrice(venueId),
+            onShowPurchaseDiamondsPanel: () =>
+                _showPurchaseDiamondsBottomSheet(),
+            userDiamondBalance: _userDiamondBalance,
+            getCategoryIcon: (category) => Icons.place,
+            buildCheckedInUsersList: (venue, canSee) =>
+                _buildCheckedInUsersList(venue),
+            sentChatRequestUserIds: _sentChatRequestUserIds,
+            onHandleChatRequest: _handleChatRequest,
+          );
+        },
       ),
     ).then((_) {
-      // 🔄 RESET FLAG: Sheet closed, allow new venue details to open
+      // Setter route ile birlikte ölür; önce onu bırak.
+      _venueSheetSetState = null;
       _isVenueDetailsOpen = false;
     });
+  }
+
+  /// Açık mekan sayfasını yerinde yeniden çizer.
+  ///
+  /// Her yerden, her an çağrılabilir — sayfa kapandıysa sessizce hiçbir şey
+  /// yapmaz. try/catch savunma gürültüsü değil: modal route ile
+  /// StatefulBuilder elemanının sökülme anları farklıdır, aradaki pencerede
+  /// setter çağrılırsa release derlemesinde çökme olur.
+  void _rebuildVenueSheet() {
+    final setter = _venueSheetSetState;
+    if (setter == null || _isDisposed || !mounted) return;
+    try {
+      setter(() {});
+    } catch (_) {
+      _venueSheetSetState = null;
+    }
   }
 
   // ⚡ ASYNC MARKER UPDATE - Prevents UI blocking

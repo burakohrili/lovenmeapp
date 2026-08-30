@@ -5,14 +5,76 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getAuth} = require("firebase-admin/auth");
+const {getStorage} = require("firebase-admin/storage");
 const {Resend} = require("resend");
 const {defineString, defineSecret} = require("firebase-functions/params");
 const functions = require("firebase-functions");
 const axios = require("axios");
 const cors = require("cors")({origin: true});
 const {GoogleAuth} = require("google-auth-library");
+const crypto = require("crypto");
 
 initializeApp();
+
+// ============================================================
+// ORTAK GÜVENLİK YARDIMCILARI (30.08.2026)
+// ============================================================
+
+/**
+ * Çağıranın oturum açmış olmasını zorunlu kılar.
+ * Bu e-posta fonksiyonları eskiden auth istemiyordu; yani herkes
+ * noreply@lovenme.app adresinden istediği adrese posta göndertebiliyordu
+ * (açık röle + alan adı itibarı riski).
+ */
+function requireAuth(request) {
+  if (!request.auth || !request.auth.uid) {
+    throw new functions.https.HttpsError(
+        "unauthenticated", "Bu işlem için giriş yapmalısınız.");
+  }
+  return request.auth.uid;
+}
+
+/** Yalnızca admin talebi olan kullanıcılar. */
+function requireAdmin(request) {
+  requireAuth(request);
+  if (!request.auth.token || request.auth.token.admin !== true) {
+    throw new functions.https.HttpsError(
+        "permission-denied", "Bu işlem için yetkiniz yok.");
+  }
+  return request.auth.uid;
+}
+
+/**
+ * Çağıranın gönderdiği metni HTML gövdesine gömmeden önce kaçırır.
+ * `userName` daha önce doğrudan şablona giriyordu; giden postalara istediğini
+ * enjekte etmek mümkündü.
+ */
+/**
+ * Dokumanlari 500'luk parcalar halinde siler.
+ * WriteBatch 500 islemle sinirlidir; bu fonksiyondaki bircok batch limitsizdi
+ * ve yogun bir mekan/gun tum calistirmayi iptal ettirebiliyordu.
+ */
+async function deleteDocsInChunks(db, docs) {
+  let removed = 0;
+  for (let i = 0; i < docs.length; i += 450) {
+    const slice = docs.slice(i, i + 450);
+    const batch = db.batch();
+    slice.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    removed += slice.length;
+  }
+  return removed;
+}
+
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+}
+
 
 // Parametreleri tanımla
 const resendKey = defineString("RESEND_KEY");
@@ -20,6 +82,10 @@ const googleServiceAccountKey = defineSecret("GOOGLE_SERVICE_ACCOUNT_KEY");
 const netgsmUsercode = defineString("NETGSM_USERCODE");
 const netgsmPassword = defineString("NETGSM_PASSWORD");
 const netgsmHeader = defineString("NETGSM_HEADER");
+// NOT: RTDN audience icin ayri bir yapilandirma parametresi TUTMUYORUZ;
+// fonksiyonun kendi URL'i audience olarak hesaplaniyor. Pub/Sub push
+// aboneligi olustururken audience alani bos birakilirsa Google zaten push
+// endpoint URL'ini kullanir.
 
 // Push notification request handler - yeni sistem
 exports.handleNotificationRequest = onDocumentCreated(
@@ -198,9 +264,11 @@ exports.sendVerificationEmail = onCall(
     enforceAppCheck: false, // App Check bypass - email doğrulama için güvenli
   },
   async (request) => {
-    const {email, code, userName} = request.data;
+    requireAuth(request); // açık e-posta rölesi olmasın
+    const {email, code} = request.data;
+    const userName = escapeHtml(request.data.userName);
     
-    console.log(`📧 Email gönderiliyor: ${email}, Kod: ${code}`);
+    console.log("📧 Dogrulama e-postasi gonderiliyor");
     
     // Input validation
     if (!email || !code || !userName) {
@@ -288,225 +356,164 @@ exports.dailyReset = onSchedule(
       let errors = 0;
       
       // 1. GÜNLÜK LİMİTLERİ RESET ET
-      console.log("� Kullanıcı limitlerini resetleniyor...");
-      const usersSnapshot = await db.collection("users")
-        .where("isActive", "==", true)
-        .get();
-      
-      const batch = db.batch();
-      let batchCount = 0;
-      
-      for (const userDoc of usersSnapshot.docs) {
-        const userData = userDoc.data();
-        const isPremium = userData.isPremium || false;
-        
-        // Premium süresini kontrol et
-        if (isPremium && userData.premiumUntil) {
-          const premiumUntil = userData.premiumUntil.toDate();
-          if (now > premiumUntil) {
-            // Premium süresi dolmuş, normal kullanıcı yap
-            batch.update(userDoc.ref, {
-              isPremium: false,
-              premiumUntil: null,
-              premiumType: null,
-              dailyChatRequestsRemaining: 5, // 💬 Normal: 5 chat/gün
-              dailyRewindsRemaining: 0,
-              // superChatsRemaining: unchanged - IAP paketler korunur! 🔥
-              lastDailyReset: now,
-            });
-            console.log(`🔚 Premium süresi doldu: ${userDoc.id} - Normal limitlere döndü (5 chat/gün)`);
-          } else {
-            // Premium aktif - Sınırsız chat + 3 rewind
-            batch.update(userDoc.ref, {
-              dailyChatRequestsRemaining: 999, // 💬 Premium: Sınırsız chat
-              dailyRewindsRemaining: 3, // 🔄 Günde 3 geri alma hakkı
-              // superChatsRemaining: unchanged - IAP paketler korunur! 🔥
-              lastDailyReset: now,
-            });
-            
-            console.log(`🔄 Premium reset: ${userDoc.id} - günlük faydalar yenilendi (unlimited chats + 3 rewinds)`);
-          }
-        } else {
-          // Normal kullanıcı limitlerini ayarla
-          batch.update(userDoc.ref, {
-            dailyChatRequestsRemaining: 5, // 💬 Normal: 5 chat/gün
-            dailyRewindsRemaining: 0,
-            // superChatsRemaining: unchanged - IAP paketler korunur! 🔥
+      // ============================================================
+      // 1. KULLANICI GÜNLÜK LİMİTLERİ
+      // ============================================================
+      // ESKİ HATALAR (30.08.2026'da düzeltildi):
+      //  a) `batch` döngü dışında bir kez oluşturuluyor, 500'de commit edilip
+      //     YENİDEN OLUŞTURULMUYORDU → 501. kullanıcıda
+      //     "Cannot modify a WriteBatch that has been committed" ile çöküyordu.
+      //  b) `.where("isActive","==",true)` filtresi vardı; ama onboarding'in
+      //     son adımı kullanıcı dokümanını merge:false ile yazıp `isActive`
+      //     alanını siliyordu → onboarding'i tamamlamış HİÇBİR kullanıcı
+      //     eşleşmiyordu, yani bu iş yıllardır boşa çalışıyordu.
+      //  c) Sayfalama yoktu; tüm kullanıcılar tek seferde belleğe alınıyordu.
+      console.log("Kullanici limitleri resetleniyor...");
+
+      const PAGE = 500;
+      let lastUserDoc = null;
+      let usersProcessed = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let q = db.collection("users").orderBy("__name__").limit(PAGE);
+        if (lastUserDoc) q = q.startAfter(lastUserDoc);
+
+        const page = await q.get();
+        if (page.empty) break;
+
+        const batch = db.batch(); // her sayfa için YENİ batch
+        for (const userDoc of page.docs) {
+          const userData = userDoc.data();
+          const isPremium = userData.isPremium || false;
+
+          const common = {
+            // Hem sunucu hem istemci aynı işareti okusun diye ikisi de yazılır.
+            // (İstemci `lastLimitReset`, sunucu `lastDailyReset` kullanıyordu;
+            //  bu yüzden istemci her sabah tekrar reset ediyordu.)
             lastDailyReset: now,
-          });
+            lastLimitReset: now,
+          };
+
+          if (isPremium && userData.premiumUntil) {
+            const premiumUntil = userData.premiumUntil.toDate();
+            if (now > premiumUntil) {
+              batch.update(userDoc.ref, Object.assign({
+                isPremium: false,
+                premiumUntil: null,
+                premiumType: null,
+                dailyChatRequestsRemaining: 5,
+              }, common));
+            } else {
+              batch.update(userDoc.ref, Object.assign({
+                dailyChatRequestsRemaining: 999,
+              }, common));
+            }
+          } else {
+            batch.update(userDoc.ref, Object.assign({
+              dailyChatRequestsRemaining: 5,
+            }, common));
+          }
+
+          usersProcessed++;
         }
-        
-        batchCount++;
-        totalProcessed++;
-        
-        // Her 500 işlemde batch commit et
-        if (batchCount === 500) {
-          await batch.commit();
-          console.log(`✅ ${batchCount} kullanıcı limiti resetlendi`);
-          batchCount = 0;
-        }
-      }
-      
-      // Kalan batch'i commit et
-      if (batchCount > 0) {
+
         await batch.commit();
-        console.log(`✅ Son ${batchCount} kullanıcı limiti resetlendi`);
+        lastUserDoc = page.docs[page.docs.length - 1];
+        if (page.size < PAGE) break;
       }
-      
-      // 2. GÜNLÜK MUHTAR VERİLERİNİ TEMİZLE
-      console.log("👑 Dünkü muhtarlar temizleniyor...");
+
+      totalProcessed = usersProcessed;
+      console.log(`${usersProcessed} kullanici limiti resetlendi`);
+
+      // ============================================================
+      // 2. DÜNKÜ MUHTARLAR
+      // ============================================================
       const mayorSnapshot = await db.collection("daily_mayors")
         .where("date", "<", today)
+        .limit(2000)
         .get();
-      
-      const mayorBatch = db.batch();
-      for (const mayorDoc of mayorSnapshot.docs) {
-        mayorBatch.delete(mayorDoc.ref);
-      }
-      
-      if (mayorSnapshot.docs.length > 0) {
-        await mayorBatch.commit();
-        console.log(`✅ ${mayorSnapshot.docs.length} eski muhtar kaydı temizlendi`);
-      }
-      
-      // 3. ESKİ CHECK-IN'LERİ TEMİZLE (3 günden eski olanları sil - database temizliği için)
-      console.log("🧹 3 günden eski check-in'ler temizleniyor...");
-      console.log("ℹ️ Açıklama: Sadece 3 günden eski check-in kayıtları database'den silinir");
-      console.log("ℹ️ Bu günlük check-in temizliğiyle alakası yok, sadece database temizliği");
-      
+      const mayorsCleared = await deleteDocsInChunks(db, mayorSnapshot.docs);
+      console.log(`${mayorsCleared} eski muhtar kaydi temizlendi`);
+
+      // ============================================================
+      // 3. 3 GÜNDEN ESKİ CHECK-IN'LER
+      // ============================================================
       const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000);
-      console.log(`📅 3 gün öncesi tarihi: ${threeDaysAgo.toISOString()}`);
-      
       const oldCheckInsSnapshot = await db.collection("check_ins")
         .where("checkInTime", "<", threeDaysAgo)
-        .limit(1000) // Batch limiti
+        .limit(2000)
         .get();
-      
-      const checkInBatch = db.batch();
-      for (const checkInDoc of oldCheckInsSnapshot.docs) {
-        checkInBatch.delete(checkInDoc.ref);
-      }
-      
-      if (oldCheckInsSnapshot.docs.length > 0) {
-        await checkInBatch.commit();
-        console.log(`✅ Database temizliği: ${oldCheckInsSnapshot.docs.length} eski check-in kaydı silindi`);
-      } else {
-        console.log(`ℹ️ Database temizliği: Silinecek eski check-in bulunamadı`);
-      }
-      
-      // 4. ESKİ CHECK-IN HISTORY'LERİ TEMİZLE (30 günden eski - discover için saklanan)
-      console.log("🗃️ 30 günden eski check-in history'ler temizleniyor...");
-      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-      console.log(`📅 30 gün öncesi tarihi: ${thirtyDaysAgo.toISOString()}`);
-      
+      const checkInsCleared =
+        await deleteDocsInChunks(db, oldCheckInsSnapshot.docs);
+      console.log(`${checkInsCleared} eski check-in silindi`);
+
+      // ============================================================
+      // 4. SÜRESİ DOLMUŞ CHECK-IN HISTORY
+      // ============================================================
       const oldHistorySnapshot = await db.collection("check_in_history")
         .where("expiresAt", "<=", now)
-        .limit(1000)
+        .limit(2000)
         .get();
-      
-      const historyBatch = db.batch();
-      for (const historyDoc of oldHistorySnapshot.docs) {
-        historyBatch.delete(historyDoc.ref);
-      }
-      
-      let historyCleared = 0;
-      if (oldHistorySnapshot.docs.length > 0) {
-        await historyBatch.commit();
-        historyCleared = oldHistorySnapshot.docs.length;
-        console.log(`✅ Check-in history temizliği: ${historyCleared} eski discover kaydı silindi`);
-      } else {
-        console.log(`ℹ️ Check-in history temizliği: Silinecek eski kayıt bulunamadı`);
-      }
-      
-      // 5. FAVORİ VENUE HISTORY TEMİZLİĞİ (Sadece permanent olmayanları temizle)
-      console.log("💖 Geçici favori venue history'ler kontrol ediliyor...");
-      console.log("ℹ️ NOT: Permanent favori kayıtlar temizlenmez (register favorileri)");
-      
+      const historyCleared =
+        await deleteDocsInChunks(db, oldHistorySnapshot.docs);
+      console.log(`${historyCleared} eski check-in history silindi`);
+
+      // ============================================================
+      // 5. GEÇİCİ FAVORİ HISTORY
+      // ============================================================
+      // ESKİ HATA: `.where("isPermanent","!=",true)` ile
+      // `.where("registrationDate","<",...)` aynı sorguda kullanılıyordu.
+      // Firestore iki FARKLI alanda eşitsizliğe izin vermez; sorgu her
+      // çalıştırmada fırlıyor, catch'e düşüyor ve fonksiyonun 6., 7., 8.
+      // adımları (bildirim temizliği, log, premium kuyruğu) HİÇ çalışmıyordu.
+      // Çözüm: tek eşitsizlikle sorgula, kalıcı olanları kodda ele.
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
       const tempFavoriteSnapshot = await db.collection("favorite_venue_history")
-        .where("isPermanent", "!=", true)
         .where("registrationDate", "<", thirtyDaysAgo)
-        .limit(1000)
+        .limit(2000)
         .get();
-      
-      const favoriteBatch = db.batch();
-      for (const favoriteDoc of tempFavoriteSnapshot.docs) {
-        favoriteBatch.delete(favoriteDoc.ref);
-      }
-      
-      let favoritesCleared = 0;
-      if (tempFavoriteSnapshot.docs.length > 0) {
-        await favoriteBatch.commit();
-        favoritesCleared = tempFavoriteSnapshot.docs.length;
-        console.log(`✅ Geçici favori history temizliği: ${favoritesCleared} kayıt silindi`);
-      } else {
-        console.log(`ℹ️ Geçici favori history: Silinecek kayıt bulunamadı`);
-      }
-      
-            // 6. ESKİ BİLDİRİMLERİ TEMİZLE (7 günden eski)
-      console.log("📱 Eski bildirimler temizleniyor...");
+      const deletableFavorites = tempFavoriteSnapshot.docs
+        .filter((d) => d.data().isPermanent !== true);
+      const favoritesCleared =
+        await deleteDocsInChunks(db, deletableFavorites);
+      console.log(`${favoritesCleared} gecici favori history silindi`);
+
+      // ============================================================
+      // 6. ESKİ BİLDİRİMLER
+      // ============================================================
       const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
       const oldNotificationsSnapshot = await db.collection("notifications")
         .where("createdAt", "<", sevenDaysAgo)
-        .limit(1000)
+        .limit(2000)
         .get();
-      
-      const notificationBatch = db.batch();
-      for (const notificationDoc of oldNotificationsSnapshot.docs) {
-        notificationBatch.delete(notificationDoc.ref);
-      }
-      
-      if (oldNotificationsSnapshot.docs.length > 0) {
-        await notificationBatch.commit();
-        console.log(`✅ ${oldNotificationsSnapshot.docs.length} eski bildirim temizlendi`);
-      }
-      
-      // 7. SİSTEM LOG'U KAYDET
+      const notificationsCleared =
+        await deleteDocsInChunks(db, oldNotificationsSnapshot.docs);
+      console.log(`${notificationsCleared} eski bildirim silindi`);
+
+      // ============================================================
+      // 7. PREMIUM KUYRUĞU
+      // ============================================================
+      await activateQueuedPremiums(db, now);
+
+      // ============================================================
+      // 8. LOG (tek kez — eskiden aynı kayıt iki kez yazılıyordu)
+      // ============================================================
       await db.collection("system_logs").add({
         type: "daily_reset",
         timestamp: now,
         usersProcessed: totalProcessed,
-        mayorsCleared: mayorSnapshot.docs.length,
-        checkInsCleared: oldCheckInsSnapshot.docs.length,
+        mayorsCleared: mayorsCleared,
+        checkInsCleared: checkInsCleared,
         historyCleared: historyCleared,
         favoritesCleared: favoritesCleared,
-        notificationsCleared: oldNotificationsSnapshot.docs.length,
+        notificationsCleared: notificationsCleared,
         errors: errors,
         success: true,
       });
-      
-      // 8. PREMIUM KUYRUK YÖNETİMİ - Süresi dolmuş premiuma sahip kullanıcılar için kuyruktan sonraki premium'ı aktif et
-      console.log("🎫 Premium kuyruk kontrolü başlatılıyor...");
-      await activateQueuedPremiums(db, now);
-      
-      console.log("✅ Günlük reset tamamlandı:");
-      console.log(`   👥 ${totalProcessed} kullanıcının günlük hakları resetlendi (00:00 otomatik)`);
-      console.log(`   👑 ${mayorSnapshot.docs.length} eski muhtar kaydı temizlendi`);
-      console.log(`   🗑️ ${oldCheckInsSnapshot.docs.length} eski check-in kaydı silindi (database temizliği)`);
-      console.log(`   📋 ${historyCleared} eski check-in history silindi`);
-      console.log(`   💖 ${favoritesCleared} geçici favori history silindi`);
-      console.log(`   🔔 ${oldNotificationsSnapshot.docs.length} eski bildirim silindi`);
-      console.log("ℹ️ NOT: Günlük check-in temizliği ayrı fonksiyonda (venue kapanış saatlerine göre)");
-      console.log("ℹ️ NOT: Permanent favori kayıtlar korunur (register favorileri)");
-      
-      // 6. SİSTEM LOG'U KAYDET
-      await db.collection("system_logs").add({
-        type: "daily_reset",
-        timestamp: now,
-        usersProcessed: totalProcessed,
-        mayorsCleared: mayorSnapshot.docs.length,
-        checkInsCleared: oldCheckInsSnapshot.docs.length,
-        notificationsCleared: oldNotificationsSnapshot.docs.length,
-        errors: errors,
-        success: true,
-      });
-      
-      console.log("✅ Günlük reset tamamlandı:");
-      console.log(`   👥 ${totalProcessed} kullanıcının günlük hakları resetlendi (00:00 otomatik)`);
-      console.log(`   👑 ${mayorSnapshot.docs.length} eski muhtar kaydı temizlendi`);
-      console.log(`   �️ ${oldCheckInsSnapshot.docs.length} eski check-in kaydı silindi (database temizliği)`);
-      console.log(`   🔔 ${oldNotificationsSnapshot.docs.length} eski bildirim silindi`);
-      console.log("ℹ️ NOT: Günlük check-in temizliği ayrı fonksiyonda (venue kapanış saatlerine göre)");
-      
+
+      console.log("Gunluk reset tamamlandi.");
+
       return {success: true, processed: totalProcessed};
       
     } catch (error) {
@@ -621,37 +628,31 @@ exports.cleanupOldData = onSchedule({
     // 1. Eski notifications temizle (1 hafta)
     const oldNotificationsSnapshot = await db.collection("notifications")
       .where("createdAt", "<", oneWeekAgo)
-      .limit(1000)
+      .limit(2000)
       .get();
-    
-    for (const doc of oldNotificationsSnapshot.docs) {
-      await doc.ref.delete();
-      totalDeleted++;
-    }
+    // Eskiden seri `await doc.ref.delete()` dongusuydu: 1000 kayit =
+    // 1000 ardisik gidis-donus, 540 sn zaman asimina takiliyordu.
+    totalDeleted += await deleteDocsInChunks(db, oldNotificationsSnapshot.docs);
     console.log(`🔔 ${oldNotificationsSnapshot.size} eski bildirim temizlendi`);
     
     // 2. Eski notification_requests temizle (1 hafta)
     const oldRequestsSnapshot = await db.collection("notification_requests")
       .where("createdAt", "<", oneWeekAgo)
-      .limit(1000)
+      .limit(2000)
       .get();
-    
-    for (const doc of oldRequestsSnapshot.docs) {
-      await doc.ref.delete();
-      totalDeleted++;
-    }
+    // Eskiden seri `await doc.ref.delete()` dongusuydu: 1000 kayit =
+    // 1000 ardisik gidis-donus, 540 sn zaman asimina takiliyordu.
+    totalDeleted += await deleteDocsInChunks(db, oldRequestsSnapshot.docs);
     console.log(`📤 ${oldRequestsSnapshot.size} eski bildirim isteği temizlendi`);
     
     // 3. Eski system_logs temizle (1 ay)
     const oldLogsSnapshot = await db.collection("system_logs")
       .where("timestamp", "<", oneMonthAgo)
-      .limit(1000)
+      .limit(2000)
       .get();
-    
-    for (const doc of oldLogsSnapshot.docs) {
-      await doc.ref.delete();
-      totalDeleted++;
-    }
+    // Eskiden seri `await doc.ref.delete()` dongusuydu: 1000 kayit =
+    // 1000 ardisik gidis-donus, 540 sn zaman asimina takiliyordu.
+    totalDeleted += await deleteDocsInChunks(db, oldLogsSnapshot.docs);
     console.log(`📋 ${oldLogsSnapshot.size} eski sistem logu temizlendi`);
     
     // Cleanup log oluştur
@@ -683,7 +684,9 @@ exports.cleanupOldData = onSchedule({
 exports.getSystemStatus = onCall({
   region: "us-central1",
   enforceAppCheck: false, // Public endpoint - App Check bypass
-}, async () => {
+}, async (request) => {
+  // Eskiden auth'suz herkese açıktı: kullanıcı ve premium sayıları sızıyordu.
+  requireAdmin(request);
   console.log("📊 Sistem durumu kontrol ediliyor...");
   
   try {
@@ -768,109 +771,143 @@ exports.cleanupVenueCheckIns = onSchedule(
     console.log(`🕐 Şu anki saat: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`);
     
     try {
+      // ============================================================
+      // ESKİ TASARIM SORUNU (30.08.2026'da değiştirildi):
+      // Bu iş saatte bir `venues` koleksiyonunun TAMAMINI filtresiz ve
+      // limitsiz okuyordu. 50k mekanda günde ~1.2M okuma demekti ve mekan
+      // sayısı büyüdükçe doğrusal olarak pahalılaşıyordu. Üstelik history ve
+      // silme batch'leri 500'lük parçalara bölünmediği için yoğun bir mekan
+      // (günde 500+ check-in) tüm saatlik çalıştırmayı iptal ettiriyordu.
+      //
+      // YENİ TASARIM: Sorguyu tersine çevir. Mekanlardan değil, BUGÜNKÜ
+      // CHECK-IN'LERDEN başla — bunlar her zaman çok daha az. Yalnızca bugün
+      // check-in almış mekanların dokümanı okunur.
+      // ============================================================
       let totalCleaned = 0;
       let venuesProcessed = 0;
-      
-      // Aktif venue'ları al
-      const venuesSnapshot = await db.collection("venues")
-        .get();
-      
-      for (const venueDoc of venuesSnapshot.docs) {
-        const venueData = venueDoc.data();
-        const venueId = venueDoc.id;
-        const venueName = venueData.name || "Bilinmeyen Mekan";
-        
-        // Kapanış saatini belirle
-        let shouldCleanup = false;
-        let cleanupReason = "";
-        
-        if (venueData.closingTime) {
-          // Venue'nin kendi kapanış saati var
-          const closingTime = venueData.closingTime;
-          const timeParts = closingTime.split(":");
-          const closingHour = timeParts.length > 0 ? (parseInt(timeParts[0]) || 2) : 2;
-          const closingMinute = timeParts.length > 1 ? (parseInt(timeParts[1]) || 0) : 0;
-          
-          let venueClosingDateTime;
+
+      const todayStart = new Date(
+        now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(
+        now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+      // 1) Bugünkü check-in'leri sayfalayarak topla, mekana göre grupla.
+      const byVenue = new Map();
+      let cursor = null;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let q = db.collection("check_ins")
+          .where("checkInTime", ">=", todayStart)
+          .where("checkInTime", "<", todayEnd)
+          .orderBy("checkInTime")
+          .limit(1000);
+        if (cursor) q = q.startAfter(cursor);
+
+        const page = await q.get();
+        if (page.empty) break;
+
+        for (const doc of page.docs) {
+          const venueId = doc.data().venueId;
+          if (!venueId) continue;
+          if (!byVenue.has(venueId)) byVenue.set(venueId, []);
+          byVenue.get(venueId).push(doc);
+        }
+
+        cursor = page.docs[page.docs.length - 1];
+        if (page.size < 1000) break;
+      }
+
+      console.log(`Bugun check-in alan mekan sayisi: ${byVenue.size}`);
+
+      // 2) Yalnızca bu mekanların dokümanlarını oku (10'luk gruplar).
+      const venueIds = Array.from(byVenue.keys());
+      for (let i = 0; i < venueIds.length; i += 10) {
+        const chunk = venueIds.slice(i, i + 10);
+        const refs = chunk.map((id) => db.collection("venues").doc(id));
+        const venueDocs = await db.getAll(...refs);
+
+        for (const venueDoc of venueDocs) {
+          venuesProcessed++;
+          const venueId = venueDoc.id;
+          const venueData = venueDoc.exists ? venueDoc.data() : {};
+          const venueName = venueData.name || "Bilinmeyen Mekan";
+
+          // Kapanış saatini belirle (mekan yoksa varsayılan 02:00).
+          let closingHour = 2;
+          let closingMinute = 0;
+          if (venueData.closingTime) {
+            const parts = String(venueData.closingTime).split(":");
+            closingHour = parseInt(parts[0]) || 2;
+            closingMinute = parts.length > 1 ? (parseInt(parts[1]) || 0) : 0;
+          }
+
+          let closingDateTime;
           if (closingHour < 6) {
-            // Gece 06:00'dan önce kapanan mekanlar ertesi gün kapanıyor
+            // Gece yarısından sonra kapanan mekanlar ertesi güne sarkar.
             const tomorrow = new Date(now);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            venueClosingDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), closingHour, closingMinute);
+            closingDateTime = new Date(tomorrow.getFullYear(),
+              tomorrow.getMonth(), tomorrow.getDate(),
+              closingHour, closingMinute);
           } else {
-            // Normal kapanış saatleri
-            venueClosingDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), closingHour, closingMinute);
+            closingDateTime = new Date(now.getFullYear(), now.getMonth(),
+              now.getDate(), closingHour, closingMinute);
           }
-          
-          if (now >= venueClosingDateTime) {
-            shouldCleanup = true;
-            cleanupReason = `Venue kapanış saati: ${closingTime}`;
-          }
-        } else {
-          // Kapanış saati yok, gece 02:00'da temizle
-          const defaultCleanupTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 2, 0); // 02:00
-          if (now >= defaultCleanupTime) {
-            shouldCleanup = true;
-            cleanupReason = "Varsayılan kapanış: 02:00";
-          }
-        }
-        
-        if (shouldCleanup) {
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-          
-          // Bugünkü check-in'leri bul
-          const checkInsToDelete = await db.collection("check_ins")
-            .where("venueId", "==", venueId)
-            .where("checkInTime", ">=", todayStart)
-            .where("checkInTime", "<", todayEnd)
-            .get();
-          
-          if (checkInsToDelete.docs.length > 0) {
-            // 🔄 YENİ: Check-in'leri silmeden önce history'e kopyala
+
+          if (now < closingDateTime) continue; // henüz açık
+
+          const docs = byVenue.get(venueId) || [];
+          if (docs.length === 0) continue;
+
+          // 3) Önce history'e taşı, sonra sil — ikisi de 450'lik parçalarda.
+          for (let j = 0; j < docs.length; j += 450) {
+            const slice = docs.slice(j, j + 450);
             const historyBatch = db.batch();
-            for (const checkInDoc of checkInsToDelete.docs) {
-              const checkInData = checkInDoc.data();
-              
-              // Check-in history'e ekle (Discover sistemi için 30 gün saklansın)
+            for (const checkInDoc of slice) {
               const historyDoc = db.collection("check_in_history").doc();
-              historyBatch.set(historyDoc, {
-                ...checkInData,
-                originalCheckInId: checkInDoc.id,
-                movedToHistoryAt: now,
-                // 30 gün sonra expire olacak
-                expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-                forDiscoverMatching: true,
-              });
+              historyBatch.set(historyDoc, Object.assign({},
+                checkInDoc.data(), {
+                  originalCheckInId: checkInDoc.id,
+                  movedToHistoryAt: now,
+                  expiresAt: new Date(
+                    now.getTime() + 30 * 24 * 60 * 60 * 1000),
+                  forDiscoverMatching: true,
+                }));
             }
             await historyBatch.commit();
-            
-            // Şimdi güncel check-in'leri sil
-            const deleteBatch = db.batch();
-            for (const checkInDoc of checkInsToDelete.docs) {
-              deleteBatch.delete(checkInDoc.ref);
-            }
-            await deleteBatch.commit();
-            
-            totalCleaned += checkInsToDelete.docs.length;
-            console.log(`✅ ${venueName}: ${checkInsToDelete.docs.length} check-in temizlendi ve history'e taşındı (${cleanupReason})`);
-            
-            // Günlük muhtarı da temizle
-            const todayKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`;
-            const mayorDocId = `${venueId}_${todayKey}`;
-            
-            try {
-              await db.collection("daily_mayors").doc(mayorDocId).delete();
-              console.log(`👑 ${venueName}: Günlük muhtar temizlendi`);
-            } catch (mayorError) {
-              // Muhtar zaten yoksa hata verme
-            }
+          }
+
+          const cleaned = await deleteDocsInChunks(db, docs);
+          totalCleaned += cleaned;
+          console.log(`${venueName}: ${cleaned} check-in history'e tasindi`);
+
+          // 4) Günlük muhtarı temizle.
+          // Deterministik kimlikli doküman + auto-ID ile yazılmış olanlar.
+          // (checkin_service iki farklı biçimde yazıyor; eskiden yalnızca
+          //  deterministik olan siliniyor, auto-ID olanlar sonsuza dek
+          //  birikiyordu.)
+          const todayKey = `${now.getFullYear()}-` +
+            `${(now.getMonth() + 1).toString().padStart(2, "0")}-` +
+            `${now.getDate().toString().padStart(2, "0")}`;
+          try {
+            await db.collection("daily_mayors")
+              .doc(`${venueId}_${todayKey}`).delete();
+          } catch (e) {
+            console.error("daily_mayors silinemedi:", e.message);
+          }
+          try {
+            const strays = await db.collection("daily_mayors")
+              .where("venueId", "==", venueId)
+              .where("date", "<", todayEnd)
+              .limit(200)
+              .get();
+            await deleteDocsInChunks(db, strays.docs);
+          } catch (e) {
+            console.error("auto-ID muhtar temizligi:", e.message);
           }
         }
-        
-        venuesProcessed++;
       }
-      
+
       // Log kaydet
       await db.collection("system_logs").add({
         type: "venue_checkin_cleanup",
@@ -1029,7 +1066,9 @@ exports.sendEmailChangeVerification = onCall(
     enforceAppCheck: false,
   },
   async (request) => {
-    const {newEmail, code, userName} = request.data;
+    requireAuth(request);
+    const {newEmail, code} = request.data;
+    const userName = escapeHtml(request.data.userName);
     
     console.log(`📧 Email değiştirme doğrulama kodu gönderiliyor: ${newEmail}, Kod: ${code}`);
     
@@ -1107,7 +1146,9 @@ exports.sendPasswordChangeVerification = onCall(
     enforceAppCheck: false,
   },
   async (request) => {
-    const {email, code, userName} = request.data;
+    requireAuth(request);
+    const {email, code} = request.data;
+    const userName = escapeHtml(request.data.userName);
     
     console.log(`📧 Şifre değiştirme doğrulama kodu gönderiliyor: ${email}, Kod: ${code}`);
     
@@ -1177,7 +1218,45 @@ exports.sendPasswordChangeVerification = onCall(
   }
 );
 
-// PASSWORD RESET EMAIL - ŞİFRE SIFIRLAMA EMAIL'İ
+// ============================================================
+// PASSWORD RESET — ŞİFRE SIFIRLAMA
+// ============================================================
+// GÜVENLİK NOTU (bilerek böyle):
+// Kod SUNUCUDA üretilir, düz metin değil hash olarak saklanır, deneme sayısı
+// sayılır ve `password_reset_codes` koleksiyonu firestore.rules ile tamamen
+// kapalıdır (yalnızca Admin SDK yazar/okur). Daha önce kodu istemci üretip
+// dünyaya açık bir dokümana yazıyordu; bu, kimlik doğrulaması gerektirmeyen
+// tam hesap ele geçirmeye izin veriyordu.
+// Ayrıca hesabın var olup olmadığı SIZDIRILMAZ — e-posta adresleri bu uç
+// nokta üzerinden taranamasın diye her durumda aynı yanıt döner.
+
+const RESET_CODE_TTL_MS = 5 * 60 * 1000; // 5 dakika
+const RESET_RESEND_COOLDOWN_MS = 60 * 1000; // 60 saniye
+const RESET_MAX_ATTEMPTS = 5;
+const RESET_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** E-postayı doküman kimliği ve karşılaştırma için normalize eder. */
+function normalizeEmail(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+/** Kodu düz metin saklamamak için e-posta ile tuzlanmış SHA-256. */
+function hashResetCode(email, code) {
+  return crypto.createHash("sha256").update(email + ":" + code).digest("hex");
+}
+
+/** Zamanlama saldırısına kapalı hex karşılaştırma. */
+function safeEqualHex(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) {
+    return false;
+  }
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+  } catch (_) {
+    return false;
+  }
+}
+
 exports.sendPasswordResetEmail = onCall(
   {
     region: "us-central1",
@@ -1185,80 +1264,74 @@ exports.sendPasswordResetEmail = onCall(
     enforceAppCheck: false,
   },
   async (request) => {
-    const {email, code, userName} = request.data;
-    
-    console.log(`🔐 Şifre sıfırlama kodu gönderiliyor: ${email}, Kod: ${code}`);
-    
-    // Input validation
-    if (!email || !code) {
-      console.error("Email ve kod gerekli");
-      return {success: false, error: "Email ve kod gerekli"};
-    }
-    
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      console.error("Geçersiz email formatı:", email);
+    const email = normalizeEmail(request.data && request.data.email);
+
+    if (!email || !RESET_EMAIL_REGEX.test(email)) {
       return {success: false, error: "Geçersiz email formatı"};
     }
-    
-    const resend = new Resend(resendKey.value());
-    
+
+    // Hesabın varlığını sızdırmamak için kullanılan ortak yanıt.
+    const genericOk = {success: true};
+
+    const db = getFirestore();
+    const ref = db.collection("password_reset_codes").doc(email);
+
     try {
-      const {data, error} = await resend.emails.send({
+      // Yeniden gönderim soğuma süresi — sunucu tarafında zorunlu.
+      const existing = await ref.get();
+      if (existing.exists) {
+        const createdAtMs = existing.data().createdAtMs || 0;
+        if (Date.now() - createdAtMs < RESET_RESEND_COOLDOWN_MS) {
+          return {
+            success: false,
+            error: "Çok sık denediniz. Lütfen bir dakika bekleyin.",
+            cooldown: true,
+          };
+        }
+      }
+
+      let userRecord = null;
+      try {
+        userRecord = await getAuth().getUserByEmail(email);
+      } catch (_) {
+        userRecord = null;
+      }
+
+      // Kullanıcı yoksa e-posta göndermeyiz ama yine de başarı döneriz:
+      // aksi halde bu uç nokta bir e-posta doğrulayıcıya dönüşür.
+      if (!userRecord) {
+        console.log("Şifre sıfırlama: kayıtlı olmayan adres için istek");
+        return genericOk;
+      }
+
+      const code = String(crypto.randomInt(100000, 1000000));
+
+      await ref.set({
+        email: email,
+        codeHash: hashResetCode(email, code),
+        createdAtMs: Date.now(),
+        expiresAt: Date.now() + RESET_CODE_TTL_MS,
+        attempts: 0,
+      });
+
+      const resend = new Resend(resendKey.value());
+      const {error} = await resend.emails.send({
         from: "noreply@lovenme.app",
         to: email,
         subject: "🔒 LoveNMe - Şifre Sıfırlama Kodu",
-        html: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #E91E63 0%, #AD1457 100%); padding: 40px; text-align: center; border-radius: 10px 10px 0 0;">
-              <h1 style="color: white; margin: 0; font-size: 28px;">LoveNMe</h1>
-              <p style="color: rgba(255,255,255,0.9); margin-top: 10px;">Şifre Sıfırlama</p>
-            </div>
-            <div style="background: white; padding: 40px; border: 1px solid #e0e0e0; border-radius: 0 0 10px 10px;">
-              <h2 style="color: #333; margin-top: 0;">Merhaba${userName ? ` ${userName}` : ''}!</h2>
-              <p style="color: #666; font-size: 16px;">Şifrenizi sıfırlamak için aşağıdaki doğrulama kodunu kullanın:</p>
-              <div style="background: linear-gradient(135deg, #E91E63 0%, #AD1457 100%); padding: 25px; text-align: center; margin: 30px 0; border-radius: 8px;">
-                <span style="font-size: 42px; font-weight: bold; color: white; letter-spacing: 8px; font-family: monospace;">
-                  ${code}
-                </span>
-              </div>
-              <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <p style="color: #856404; margin: 0; font-size: 14px;">
-                  <strong>⚠️ Güvenlik Uyarısı:</strong><br>
-                  • Bu kodu sadece LoveNMe uygulamasında kullanın<br>
-                  • Kodu kimseyle paylaşmayın<br>
-                  • Şüpheli aktivite fark ederseniz derhal şifrenizi değiştirin
-                </p>
-              </div>
-              <p style="color: #999; font-size: 14px; margin-top: 30px;">
-                ⏱️ Bu kod 5 dakika geçerlidir.<br>
-                🔒 Kod doğrulandıktan sonra yeni şifrenizi belirleyebilirsiniz.
-              </p>
-              <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
-              <p style="color: #999; font-size: 12px;">
-                Bu şifre sıfırlama işlemini siz başlatmadıysanız, bu emaili görmezden gelebilirsiniz.<br>
-                Hesabınızın güvenliğinden endişe ediyorsanız, lütfen bizimle iletişime geçin.
-              </p>
-            </div>
-            <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
-              © 2026 LoveNMe. Tüm hakları saklıdır.<br>
-              <a href="https://lovenme.app" style="color: #E91E63; text-decoration: none;">lovenme.app</a>
-            </div>
-          </div>
-        `,
+        html: buildResetCodeEmailHtml(code),
       });
-      
+
       if (error) {
         console.error("Resend hatası:", error);
-        return {success: false, error: error.message};
+        return {success: false, error: "Email gönderilemedi"};
       }
-      
-      console.log(`✅ Şifre sıfırlama kodu gönderildi: ${data.id}`);
-      return {success: true, messageId: data.id};
+
+      console.log("✅ Şifre sıfırlama kodu gönderildi");
+      return genericOk;
     } catch (error) {
-      console.error("Email gönderim hatası:", error);
-      return {success: false, error: "Email gönderilemedi"};
+      console.error("Şifre sıfırlama isteği hatası:", error);
+      return {success: false, error: "İşlem tamamlanamadı"};
     }
   }
 );
@@ -1271,192 +1344,127 @@ exports.resetUserPassword = onCall(
     enforceAppCheck: false,
   },
   async (request) => {
-    const {email, newPassword, verificationCode} = request.data;
-    
-    console.log(`🔐 Şifre sıfırlama isteği: ${email}`);
-    
-    // Input validation
+    const email = normalizeEmail(request.data && request.data.email);
+    const verificationCode = String(
+      (request.data && request.data.verificationCode) || ""
+    ).trim();
+    const newPassword = request.data && request.data.newPassword;
+
     if (!email || !newPassword || !verificationCode) {
-      console.error("Email, yeni şifre ve doğrulama kodu gerekli");
-      return {success: false, error: "Email, yeni şifre ve doğrulama kodu gerekli"};
+      return {
+        success: false,
+        error: "Email, yeni şifre ve doğrulama kodu gerekli",
+      };
     }
-    
-    // Password validation
-    if (newPassword.length < 6) {
+
+    if (typeof newPassword !== "string" || newPassword.length < 6) {
       return {success: false, error: "Şifre en az 6 karakter olmalı"};
     }
-    
+
+    const db = getFirestore();
+    const ref = db.collection("password_reset_codes").doc(email);
+
     try {
-      // Doğrulama kodunu kontrol et
-      const codeDoc = await getFirestore()
-        .collection("password_reset_codes")
-        .doc(email)
-        .get();
-      
+      const codeDoc = await ref.get();
       if (!codeDoc.exists) {
-        console.error("Doğrulama kodu bulunamadı");
         return {success: false, error: "Doğrulama kodu bulunamadı"};
       }
-      
+
       const codeData = codeDoc.data();
-      
-      // Kodun süresini kontrol et
-      if (Date.now() > codeData.expiresAt) {
-        console.error("Doğrulama kodunun süresi dolmuş");
+
+      if (Date.now() > (codeData.expiresAt || 0)) {
+        await ref.delete();
         return {success: false, error: "Doğrulama kodunun süresi dolmuş"};
       }
-      
-      // Kodu doğrula
-      if (codeData.code !== verificationCode) {
-        console.error("Geçersiz doğrulama kodu");
+
+      // Kaba kuvvet koruması: her hatalı denemeden sonra sayaç artar.
+      const attempts = (codeData.attempts || 0) + 1;
+      if (attempts > RESET_MAX_ATTEMPTS) {
+        await ref.delete();
+        return {
+          success: false,
+          error: "Çok fazla hatalı deneme. Lütfen yeni kod isteyin.",
+        };
+      }
+
+      const expectedHash = hashResetCode(email, verificationCode);
+      if (!safeEqualHex(codeData.codeHash, expectedHash)) {
+        await ref.update({attempts: attempts});
         return {success: false, error: "Geçersiz doğrulama kodu"};
       }
-      
-      // Kullanıcıyı email ile bul
+
       const userRecord = await getAuth().getUserByEmail(email);
-      
       if (!userRecord) {
-        console.error("Kullanıcı bulunamadı");
         return {success: false, error: "Kullanıcı bulunamadı"};
       }
-      
-      // Şifreyi güncelle
-      await getAuth().updateUser(userRecord.uid, {
-        password: newPassword,
-      });
-      
-      // Doğrulama kodunu sil
-      await getFirestore()
-        .collection("password_reset_codes")
-        .doc(email)
-        .delete();
-      
-      console.log(`✅ Şifre başarıyla güncellendi: ${email}`);
+
+      await getAuth().updateUser(userRecord.uid, {password: newPassword});
+
+      // Çalınmış oturumların devam etmemesi için yenileme jetonlarını iptal et.
+      await getAuth().revokeRefreshTokens(userRecord.uid);
+
+      await ref.delete();
+
+      console.log("✅ Şifre başarıyla güncellendi");
       return {success: true, message: "Şifre başarıyla güncellendi"};
     } catch (error) {
       console.error("Şifre güncelleme hatası:", error);
-      return {success: false, error: error.message || "Şifre güncellenemedi"};
+      return {success: false, error: "Şifre güncellenemedi"};
     }
   }
 );
 
-// 🗺️ GOOGLE PLACES API PROXY - Bot Manager için (CORS bypass)
-exports.searchPlaces = onCall(
-  {
-    region: "us-central1",
-    cors: true,
-    enforceAppCheck: false,
-  },
-  async (request) => {
-    const {query, location, radius, type} = request.data;
-    
-    console.log(`🔍 Google Places arama: "${query}"`);
-    
-    if (!query || query.trim().length < 3) {
-      return {success: false, error: "Arama sorgusu en az 3 karakter olmalı"};
-    }
-    
-    // Firebase Functions v2 için environment variable kullan
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    
-    if (!apiKey) {
-      console.error("Google Places API Key tanımlanmamış");
-      return {success: false, error: "Google Places API yapılandırılmamış"};
-    }
-    
-    try {
-      // Text Search API kullan
-      const response = await axios.get(
-        "https://maps.googleapis.com/maps/api/place/textsearch/json",
-        {
-          params: {
-            query: query,
-            key: apiKey,
-            language: "tr",
-            ...(location && {location: location}), // "lat,lng" formatında
-            ...(radius && {radius: radius}),
-            ...(type && {type: type}),
-          },
-        }
-      );
-      
-      if (response.data.status !== "OK" && response.data.status !== "ZERO_RESULTS") {
-        console.error("Google Places API hatası:", response.data.status);
-        return {
-          success: false,
-          error: `Google Places API hatası: ${response.data.status}`,
-        };
-      }
-      
-      console.log(`✅ ${response.data.results.length} sonuç bulundu`);
-      
-      return {
-        success: true,
-        results: response.data.results,
-        status: response.data.status,
-      };
-      
-    } catch (error) {
-      console.error("Google Places arama hatası:", error.message);
-      return {
-        success: false,
-        error: error.message || "Mekan araması başarısız",
-      };
-    }
-  }
-);
+/**
+ * Şifre sıfırlama e-postasının gövdesi.
+ * Buraya YALNIZCA sunucuda üretilmiş kod girer; çağıranın gönderdiği hiçbir
+ * metin HTML'e gömülmez (eskiden `userName` doğrudan gömülüyordu ve bu bir
+ * HTML enjeksiyon yüzeyiydi).
+ */
+function buildResetCodeEmailHtml(code) {
+  return [
+    '<div style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif; max-width: 600px; margin: 0 auto;">',
+    '<div style="background: linear-gradient(135deg, #E91E63 0%, #AD1457 100%); padding: 40px; text-align: center; border-radius: 10px 10px 0 0;">',
+    '<h1 style="color: white; margin: 0; font-size: 28px;">LoveNMe</h1>',
+    '<p style="color: rgba(255,255,255,0.9); margin-top: 10px;">Şifre Sıfırlama</p>',
+    "</div>",
+    '<div style="background: white; padding: 40px; border: 1px solid #e0e0e0; border-radius: 0 0 10px 10px;">',
+    '<h2 style="color: #333; margin-top: 0;">Merhaba!</h2>',
+    '<p style="color: #666; font-size: 16px;">Şifrenizi sıfırlamak için aşağıdaki doğrulama kodunu kullanın:</p>',
+    '<div style="background: linear-gradient(135deg, #E91E63 0%, #AD1457 100%); padding: 25px; text-align: center; margin: 30px 0; border-radius: 8px;">',
+    '<span style="font-size: 42px; font-weight: bold; color: white; letter-spacing: 8px; font-family: monospace;">',
+    code,
+    "</span>",
+    "</div>",
+    '<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0;">',
+    '<p style="color: #856404; margin: 0; font-size: 14px;">',
+    "<strong>⚠️ Güvenlik Uyarısı:</strong><br>",
+    "• Bu kodu sadece LoveNMe uygulamasında kullanın<br>",
+    "• Kodu kimseyle paylaşmayın<br>",
+    "• Şüpheli aktivite fark ederseniz derhal şifrenizi değiştirin",
+    "</p>",
+    "</div>",
+    '<p style="color: #999; font-size: 14px; margin-top: 30px;">',
+    "⏱️ Bu kod 5 dakika geçerlidir.<br>",
+    "🔒 Kod doğrulandıktan sonra yeni şifrenizi belirleyebilirsiniz.",
+    "</p>",
+    '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">',
+    '<p style="color: #999; font-size: 12px;">',
+    "Bu şifre sıfırlama işlemini siz başlatmadıysanız, bu emaili görmezden gelebilirsiniz.<br>",
+    "Hesabınızın güvenliğinden endişe ediyorsanız, lütfen bizimle iletişime geçin.",
+    "</p>",
+    "</div>",
+    '<div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">',
+    "© 2026 LoveNMe. Tüm hakları saklıdır.<br>",
+    '<a href="https://lovenme.app" style="color: #E91E63; text-decoration: none;">lovenme.app</a>',
+    "</div>",
+    "</div>",
+  ].join("");
+}
 
-// 📍 GOOGLE PLACES DETAILS PROXY - Place ID ile detay getir (HTTP endpoint)
-exports.getPlaceDetails = onRequest(
-  {
-    region: "us-central1",
-  },
-  async (req, res) => {
-    return cors(req, res, async () => {
-      try {
-        const placeId = req.method === 'GET' ? req.query.placeId : req.body.placeId;
-        console.log('📍 Place detay getiriliyor:', placeId);
-
-        if (!placeId) {
-          res.status(400).json({ success: false, error: 'Place ID gerekli' });
-          return;
-        }
-
-        // Firebase Functions v2 için environment variable kullan
-        const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-        if (!apiKey) {
-          console.error('Google Places API Key tanımlanmamış');
-          res.status(500).json({ success: false, error: 'Google Places API yapılandırılmamış' });
-          return;
-        }
-
-        const response = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
-          params: {
-            place_id: placeId,
-            key: apiKey,
-            language: 'tr',
-            fields: 'name,formatted_address,geometry,rating,types,vicinity,opening_hours',
-          },
-        });
-
-        if (response.data.status !== 'OK') {
-          console.error('Google Places API hatası:', response.data.status);
-          res.status(502).json({ success: false, error: `Google Places API hatası: ${response.data.status}` });
-          return;
-        }
-
-        console.log('✅ Place detayı alındı:', response.data.result.name);
-        res.status(200).json({ success: true, result: response.data.result, status: response.data.status });
-      } catch (error) {
-        console.error('Place detay hatası:', error && error.message ? error.message : error);
-        res.status(500).json({ success: false, error: error.message || 'Place detayı alınamadı' });
-      }
-    });
-  }
-);
-
-
-
+// NOT: searchPlaces ve getPlaceDetails kaldirildi (30.08.2026).
+// Ikisi de kimlik dogrulamasiz acik uc noktaydi (getPlaceDetails ayrica
+// onRequest + cors({origin:true}) idi) ve Places faturasini herkese aciyordu.
+// Istemcide hicbir cagirani yoktu; bot altyapisi icin yazilmislardi.
 
 // 🛡️ GOOGLE PLAY PURCHASE VERIFICATION - Sunucu taraflı satın alma doğrulaması
 exports.verifyGooglePlayPurchase = onCall(
@@ -1599,6 +1607,19 @@ exports.handlePlayRTDN = onRequest(
     // Sadece POST kabul et
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
+      return;
+    }
+
+    // GÜVENLİK: Bu uç nokta eskiden HİÇBİR doğrulama yapmıyordu — herkes
+    // sahte bir "iade edildi" bildirimi POST'layıp istediği kullanıcının
+    // premium'unu iptal ettirebiliyordu. Pub/Sub push aboneliği OIDC ile
+    // imzalanmalı ve imza burada doğrulanmalı.
+    // NOT: Doğrulanmamış push reddedilse bile iadeler kaybolmaz; günlük
+    // checkVoidedPurchases işi Play Voided Purchases API'sini ayrıca tarar.
+    const rtdnAuthOk = await verifyPubSubPush(req);
+    if (!rtdnAuthOk) {
+      console.error("❌ RTDN: imzasiz veya gecersiz push reddedildi");
+      res.status(403).send("Forbidden");
       return;
     }
 
@@ -2279,16 +2300,28 @@ exports.verifyOtpSms = onCall({region: "europe-west1"}, async (request) => {
   }
 
   const otpDoc = otpDocs.docs[0];
-  const storedCode = otpDoc.data().code;
+  const otpData = otpDoc.data();
+  const storedCode = otpData.code;
+
+  // KABA KUVVET KORUMASI: 6 haneli kod, sayaç olmadan sınırsız denenebiliyordu.
+  const attempts = (otpData.attempts || 0) + 1;
+  const MAX_OTP_ATTEMPTS = 5;
+  if (attempts > MAX_OTP_ATTEMPTS) {
+    await otpDoc.ref.delete();
+    return {success: false, error: "Çok fazla hatalı deneme. Yeni kod isteyin."};
+  }
 
   if (storedCode === otpCode) {
     // Doğrulandı — işaretle
     await otpDoc.ref.update({verified: true, verifiedAt: new Date()});
 
     // Eski OTP'leri temizle
+    // WriteBatch 500 işlemle sınırlıdır; limit olmadan eski kayıtlar
+    // biriktiğinde commit tamamen başarısız oluyordu.
     const oldOtps = await db.collection("otp_codes")
         .where("phoneNumber", "==", cleanPhone)
         .where("verified", "==", false)
+        .limit(400)
         .get();
     const batch = db.batch();
     oldOtps.docs.forEach((doc) => batch.delete(doc.ref));
@@ -2297,6 +2330,353 @@ exports.verifyOtpSms = onCall({region: "europe-west1"}, async (request) => {
     console.log(`✅ OTP doğrulandı: ${cleanPhone}`);
     return {success: true};
   } else {
+    await otpDoc.ref.update({attempts: attempts});
     return {success: false, error: "Hatalı doğrulama kodu."};
   }
 });
+
+// ============================================================
+// Pub/Sub push dogrulama
+// ============================================================
+/**
+ * Google Pub/Sub push aboneliginin OIDC jetonunu dogrular.
+ *
+ * Abonelik Google Cloud Console > Pub/Sub > Subscriptions > (RTDN aboneligi)
+ * > Authentication ile bir hizmet hesabina baglanmalidir. Aksi halde bu
+ * fonksiyon her push'i reddeder ve iadeler yalnizca gunluk taramayla islenir.
+ */
+async function verifyPubSubPush(req) {
+  try {
+    const header = req.get("Authorization") || "";
+    if (!header.startsWith("Bearer ")) return false;
+
+    const token = header.substring(7);
+    const {OAuth2Client} = require("google-auth-library");
+    const client = new OAuth2Client();
+
+    // Audience, aboneligin push endpoint URL'idir. Bu 2. nesil bir fonksiyon
+    // oldugu icin adres cloudfunctions.net degil *.run.app olabilir; sabit
+    // kurmak yerine gelen istegin kendi adresinden hesapliyoruz.
+    const host = req.get("x-forwarded-host") || req.get("host");
+    let audience = `https://${host}${req.path || ""}`;
+    if (audience.endsWith("/")) {
+      audience = audience.slice(0, -1);
+    }
+
+    const ticket = await client.verifyIdToken({idToken: token, audience});
+    const payload = ticket.getPayload();
+    return !!(payload && payload.iss === "https://accounts.google.com");
+  } catch (e) {
+    console.error("RTDN dogrulama hatasi:", e.message);
+    return false;
+  }
+}
+
+// ============================================================
+// HESAP SİLME — App Store Guideline 5.1.1(v)
+// ============================================================
+// ESKİ DURUM (istemci tarafındaydı ve çalışmıyordu):
+//  - Tek bir WriteBatch kullanılıyordu (500 işlem sınırı). Mesajı çok olan
+//    kullanıcıda batch fırlıyor, ATOMİK olduğu için `users/{uid}` dahil
+//    HİÇBİR ŞEY silinmiyordu ve `user.delete()` hiç çalışmıyordu.
+//  - Dört sorgu var olmayan alan adlarını kullanıyordu:
+//      messages.participants (gerçek: senderId/receiverId)
+//      likes.from/to        (gerçek: fromUserId/toUserId)
+//      reports.reporter/reported (gerçek: reporterId/reportedUserId)
+//      blocked_users.blocked → kural zaten reddediyordu
+//    Yani özel mesajlar dahil hiçbiri silinmiyordu.
+//  - Depolamada `user_photos/{uid}` ÖN EKİ siliniyordu ama yüklemeler
+//    `user_photos/{uid}_...` düz dosya adıyla yapılıyor → hiçbir profil
+//    fotoğrafı silinmiyordu.
+//  - Kullanıcıyı biri engellemişse silme tamamen başarısız oluyordu; yani
+//    çıkmak isteyen en kırılgan kullanıcı çıkamıyordu.
+//
+// Artık sunucuda, parçalı ve sırayla çalışıyor.
+
+/** Bir sorgunun tüm sonuçlarını sayfalayarak siler. */
+async function deleteByQuery(db, collection, field, value, label) {
+  let removed = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const snap = await db.collection(collection)
+      .where(field, "==", value)
+      .limit(400)
+      .get();
+    if (snap.empty) break;
+    removed += await deleteDocsInChunks(db, snap.docs);
+    if (snap.size < 400) break;
+  }
+  if (removed > 0) console.log(`${label || collection}: ${removed} kayit silindi`);
+  return removed;
+}
+
+/** Storage'da bir ön ek altındaki her şeyi siler. */
+async function deleteStoragePrefix(bucket, prefix) {
+  try {
+    await bucket.deleteFiles({prefix});
+  } catch (e) {
+    console.error(`Storage temizligi basarisiz (${prefix}):`, e.message);
+  }
+}
+
+exports.deleteAccount = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+    enforceAppCheck: false,
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    const uid = requireAuth(request);
+    const db = getFirestore();
+
+    console.log(`Hesap silme basladi: ${uid}`);
+
+    try {
+      // --- 1. Kullanıcıya ait tekil dokümanlar ---
+      const singleDocs = [
+        "users", "user_stats", "email_verifications",
+        "phone_verifications", "password_verifications",
+      ];
+      for (const coll of singleDocs) {
+        try {
+          await db.collection(coll).doc(uid).delete();
+        } catch (e) {
+          console.error(`${coll}/${uid} silinemedi:`, e.message);
+        }
+      }
+
+      // --- 2. userId alanı taşıyan koleksiyonlar ---
+      const byUserId = [
+        "check_ins", "check_in_history", "favorite_venue_history",
+        "saved_venues", "feed_posts", "notifications", "daily_mayors",
+        "diamond_transactions", "legal_acceptances", "mayor_transaction_logs",
+      ];
+      for (const coll of byUserId) {
+        await deleteByQuery(db, coll, "userId", uid);
+      }
+
+      // --- 3. İki taraflı ilişkiler ---
+      // DOĞRU alan adları — eskiden burası tamamen yanlıştı.
+      await deleteByQuery(db, "matches", "user1Id", uid, "matches(user1)");
+      await deleteByQuery(db, "matches", "user2Id", uid, "matches(user2)");
+      await deleteByQuery(db, "messages", "senderId", uid, "messages(gonderen)");
+      await deleteByQuery(db, "messages", "receiverId", uid, "messages(alan)");
+      await deleteByQuery(db, "chat_requests", "fromUserId", uid);
+      await deleteByQuery(db, "chat_requests", "toUserId", uid);
+      await deleteByQuery(db, "blocked_users", "blocker", uid);
+      await deleteByQuery(db, "blocked_users", "blocked", uid);
+
+      // --- 4. Alt koleksiyon ---
+      try {
+        const sub = await db.collection("users").doc(uid)
+          .collection("blocked_users").limit(400).get();
+        await deleteDocsInChunks(db, sub.docs);
+      } catch (e) {
+        console.error("blocked_users alt koleksiyonu:", e.message);
+      }
+
+      // --- 5. Finansal kayıtlar: SİLİNMEZ, kimliksizleştirilir ---
+      // Satın alma ve abonelik kayıtları muhasebe/iade için saklanmalı;
+      // ama kişisel veri taşımamalı.
+      for (const coll of ["purchases", "premium_subscriptions",
+        "restored_purchases"]) {
+        try {
+          const snap = await db.collection(coll)
+            .where("userId", "==", uid).limit(400).get();
+          for (let i = 0; i < snap.docs.length; i += 400) {
+            const batch = db.batch();
+            snap.docs.slice(i, i + 400).forEach((d) => {
+              batch.update(d.ref, {
+                userId: "deleted_user",
+                anonymizedAt: new Date(),
+              });
+            });
+            await batch.commit();
+          }
+        } catch (e) {
+          console.error(`${coll} kimliksizlestirme:`, e.message);
+        }
+      }
+
+      // --- 6. Şikâyetler: güvenlik kaydı olarak SAKLANIR ---
+      // Silinirse, taciz eden kişi hesabını silerek geçmişini temizleyebilirdi.
+      // Yalnızca kimliksizleştirme yapılmaz; moderasyon için gerekli.
+
+      // --- 7. Depolama: ÜÇ ayrı yol da temizlenir ---
+      const bucket = getStorage().bucket();
+      await deleteStoragePrefix(bucket, `users/${uid}/`);
+      await deleteStoragePrefix(bucket, `user_photos/${uid}_`);
+      // Check-in fotoğrafları: klasör adı `{timestamp}_{uid}` biçiminde,
+      // ön ekle bulunamaz; listeleyip eşleşenleri siliyoruz.
+      try {
+        const [files] = await bucket.getFiles({prefix: "checkins/"});
+        const mine = files.filter((f) => f.name.includes(`_${uid}/`));
+        await Promise.all(mine.map((f) => f.delete().catch(() => {})));
+      } catch (e) {
+        console.error("check-in fotograflari:", e.message);
+      }
+
+      // --- 8. Auth hesabı ---
+      await getAuth().deleteUser(uid);
+
+      console.log(`Hesap silindi: ${uid}`);
+      return {success: true};
+    } catch (error) {
+      console.error("Hesap silme hatasi:", error);
+      return {
+        success: false,
+        error: "Hesap silinemedi. Lütfen tekrar deneyin veya destek ile iletişime geçin.",
+      };
+    }
+  }
+);
+
+// ============================================================
+// MODERASYON — Apple Guideline 1.2 (UGC)
+// ============================================================
+// ESKİ DURUM: `reports` koleksiyonu doluyor ama üzerinde işlem yapacak
+// HİÇBİR araç yoktu. `ADMIN_REVIEW_READINESS_PLAN.md` setAdminClaim ve
+// bootstrapAdminClaim fonksiyonlarının var olduğunu yazıyordu; ikisi de
+// kodda yoktu. `user_warnings` koleksiyonunun kuralı vardı, kodu yoktu.
+// `ReportService.getUserReportCount()` `status == 'confirmed'` filtreliyordu
+// ama hiçbir kod status'ü 'pending' dışına çıkarmıyordu — yani hep 0.
+//
+// Aşağıdakiler bu boşluğu kapatır. Hepsi admin talebi (custom claim) ister.
+// İlk admin, Admin SDK ile elle atanır (bootstrap); sonrakiler buradan.
+
+/** Bir kullanıcıya admin yetkisi verir/alır. Yalnızca mevcut bir admin çağırabilir. */
+exports.setAdminClaim = onCall(
+  {region: "us-central1", cors: true, enforceAppCheck: false},
+  async (request) => {
+    requireAdmin(request);
+
+    const {targetUid, isAdmin} = request.data || {};
+    if (!targetUid) {
+      return {success: false, error: "targetUid gerekli"};
+    }
+
+    try {
+      await getAuth().setCustomUserClaims(targetUid, {admin: isAdmin === true});
+      // Yetki değişikliği hemen geçerli olsun.
+      await getAuth().revokeRefreshTokens(targetUid);
+
+      await getFirestore().collection("system_logs").add({
+        type: "admin_claim_changed",
+        timestamp: new Date(),
+        actor: request.auth.uid,
+        targetUid: targetUid,
+        isAdmin: isAdmin === true,
+      });
+
+      return {success: true};
+    } catch (error) {
+      console.error("setAdminClaim hatasi:", error);
+      return {success: false, error: "Yetki guncellenemedi"};
+    }
+  }
+);
+
+/** Kullanıcıyı askıya alır veya askıyı kaldırır. */
+exports.banUser = onCall(
+  {region: "us-central1", cors: true, enforceAppCheck: false},
+  async (request) => {
+    requireAdmin(request);
+
+    const {targetUid, banned, reason} = request.data || {};
+    if (!targetUid) {
+      return {success: false, error: "targetUid gerekli"};
+    }
+
+    const db = getFirestore();
+    const shouldBan = banned !== false;
+
+    try {
+      // Auth tarafında da devre dışı bırak: yalnızca Firestore bayrağı
+      // yeterli değil, kullanıcı yine oturum açabilirdi.
+      await getAuth().updateUser(targetUid, {disabled: shouldBan});
+      if (shouldBan) {
+        await getAuth().revokeRefreshTokens(targetUid);
+      }
+
+      await db.collection("users").doc(targetUid).set({
+        isBanned: shouldBan,
+        bannedAt: shouldBan ? new Date() : null,
+        banReason: shouldBan ? (reason || "Topluluk kurallari ihlali") : null,
+        isActive: !shouldBan,
+      }, {merge: true});
+
+      if (shouldBan) {
+        await db.collection("user_warnings").add({
+          userId: targetUid,
+          type: "ban",
+          reason: reason || "Topluluk kurallari ihlali",
+          actor: request.auth.uid,
+          createdAt: new Date(),
+        });
+      }
+
+      await db.collection("system_logs").add({
+        type: shouldBan ? "user_banned" : "user_unbanned",
+        timestamp: new Date(),
+        actor: request.auth.uid,
+        targetUid: targetUid,
+      });
+
+      return {success: true};
+    } catch (error) {
+      console.error("banUser hatasi:", error);
+      return {success: false, error: "Islem tamamlanamadi"};
+    }
+  }
+);
+
+/** Bir şikâyeti sonuçlandırır. */
+exports.resolveReport = onCall(
+  {region: "us-central1", cors: true, enforceAppCheck: false},
+  async (request) => {
+    requireAdmin(request);
+
+    const {reportId, status, note} = request.data || {};
+    const allowed = ["confirmed", "rejected", "reviewing"];
+    if (!reportId || !allowed.includes(status)) {
+      return {success: false, error: "reportId ve gecerli bir status gerekli"};
+    }
+
+    try {
+      await getFirestore().collection("reports").doc(reportId).update({
+        status: status,
+        resolvedAt: new Date(),
+        resolvedBy: request.auth.uid,
+        resolutionNote: note || null,
+      });
+      return {success: true};
+    } catch (error) {
+      console.error("resolveReport hatasi:", error);
+      return {success: false, error: "Sikayet guncellenemedi"};
+    }
+  }
+);
+
+/** Admin için bekleyen şikâyet kuyruğu. */
+exports.listPendingReports = onCall(
+  {region: "us-central1", cors: true, enforceAppCheck: false},
+  async (request) => {
+    requireAdmin(request);
+
+    try {
+      const snap = await getFirestore().collection("reports")
+        .where("status", "==", "pending")
+        .limit(100)
+        .get();
+
+      return {
+        success: true,
+        reports: snap.docs.map((d) => Object.assign({id: d.id}, d.data())),
+      };
+    } catch (error) {
+      console.error("listPendingReports hatasi:", error);
+      return {success: false, error: "Sikayetler getirilemedi"};
+    }
+  }
+);

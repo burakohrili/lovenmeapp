@@ -133,12 +133,16 @@ class GamificationService {
 
         final data = snap.data() ?? <String, dynamic>{};
 
-        // Check-in akışı totalCheckIns'i BU çağrıdan önce artırıyor; yani
-        // buradaki değer bu check-in dahil güncel toplam.
-        final currentTotal = (data['totalCheckIns'] as num?)?.toInt() ?? 0;
+        // Check-in sayacı ARTIK BURADA, bu işlemin içinde artırılır.
+        // Eskiden checkin_service çağrıdan ÖNCE ayrı bir update ile artırıyordu
+        // ve o update boş bir catch içindeydi (checkin_service.dart:1836, :2077).
+        // Başarısız olduğunda check-in kaydı yazılıyor ama sayaç ilerlemiyor,
+        // seviye/rozet eski sayıdan hesaplanıp kalıcı olarak kayıyordu.
+        // Tek işlem = ya ikisi birden olur ya hiçbiri; sapma imkânsız.
+        final previousTotal = (data['totalCheckIns'] as num?)?.toInt() ?? 0;
+        final currentTotal = previousTotal + 1;
         final newLevel = levelFor(currentTotal);
-        // Seviye atlandı mı: bu check-in'den ÖNCEKİ toplamın seviyesiyle kıyasla.
-        final previousLevel = levelFor(currentTotal > 0 ? currentTotal - 1 : 0);
+        final previousLevel = levelFor(previousTotal);
 
         final uniqueVenues = ((data['uniqueVenuesVisited'] as num?)?.toInt() ?? 0) +
             (isNewVenue ? 1 : 0);
@@ -194,6 +198,8 @@ class GamificationService {
         );
 
         final updates = <String, dynamic>{
+          'totalCheckIns': currentTotal,
+          'lastCheckInDate': FieldValue.serverTimestamp(),
           'currentStreak': currentStreak,
           'longestStreak': newLongest,
           'lastStreakDate': FieldValue.serverTimestamp(),

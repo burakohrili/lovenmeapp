@@ -96,13 +96,18 @@ class CommunityGuidelinesPage extends StatelessWidget {
               iconColor: Colors.green,
               title: 'İçerik Moderasyonu',
               content: 
-                'LoveNMe, platformun güvenliğini sağlamak için 7/24 aktif moderasyon '
-                'sistemi kullanır:\n\n'
-                '• Profil fotoğrafları onay sürecinden geçer\n'
-                '• Kullanıcı şikayetleri incelenir (genellikle 24 saat içinde)\n'
-                '• Otomatik sistem uygunsuz içeriği tespit eder\n'
-                '• Moderatörler manuel inceleme yapar\n'
-                '• Tekrarlayan ihlaller takip edilir',
+                // Bu metin gerçekte olmayan üç şeyi vaat ediyordu: fotoğraf
+                // onay süreci, otomatik içerik tespiti ve 7/24 moderasyon.
+                // Hiçbiri kodda yok. Karşılıksız bir güvenlik vaadi, özelliğin
+                // eksikliğinden daha büyük bir sorumluluk doğurur; metin
+                // gerçekte yapılana çekildi.
+                'LoveNMe uygulamasında güvenlik, kullanıcı bildirimlerine '
+                'dayanır:\n\n'
+                '• Her profil ve sohbetten şikâyet edebilirsin\n'
+                '• Şikâyetler ekibimize iletilir ve elle incelenir\n'
+                '• İstediğin kişiyi engelleyebilirsin; engellediğin kişi sana '
+                'bağlantı isteği gönderemez\n'
+                '• Tekrarlayan ihlaller hesabın askıya alınmasıyla sonuçlanır',
             ),
             const SizedBox(height: 24),
 
@@ -117,7 +122,7 @@ class CommunityGuidelinesPage extends StatelessWidget {
                 '1. Kullanıcı profili veya chat ekranındaki "Şikayet Et" butonuna basın\n'
                 '2. İhlal nedenini seçin (Sahte Profil, Taciz, Uygunsuz İçerik, Spam)\n'
                 '3. Şikayetiniz ekibimize iletilir\n'
-                '4. 24-48 saat içinde incelenir\n'
+                '4. En kısa sürede incelenir\n'
                 '5. Gerekli aksiyonlar alınır',
             ),
             const SizedBox(height: 24),

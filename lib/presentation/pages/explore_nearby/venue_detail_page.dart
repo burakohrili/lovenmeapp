@@ -10,6 +10,7 @@ import 'models/venue_detail_model.dart';
 import 'services/explore_nearby_service.dart';
 import '../profile/user_profile_page.dart';
 import '../../widgets/save_venue_button.dart';
+import '../../widgets/venue_cover_image.dart';
 
 class VenueDetailPage extends ConsumerStatefulWidget {
   final String venueId;
@@ -159,7 +160,7 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
           ),
         ),
         body: const Center(
-          child: Text('Venue not found'),
+          child: Text('Mekan bulunamadı'),
         ),
       );
     }
@@ -221,39 +222,15 @@ class _VenueDetailPageState extends ConsumerState<VenueDetailPage> {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Builder(
-              builder: (context) {
-                final photoUrl = _venueDetail!.photoUrl ??
-                    'https://via.placeholder.com/400x200';
-
-                return Image.network(
-                  photoUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) {
-                      return child;
-                    }
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[300],
-                      child: const Icon(
-                        Icons.image_not_supported,
-                        size: 50,
-                        color: Colors.grey,
-                      ),
-                    );
-                  },
-                );
-              },
+            // Ölü yedek kaldırıldı: burada `via.placeholder.com` kullanılıyordu
+            // ve o servis kapandığı için fotoğrafı olmayan HER mekan gri
+            // "resim yok" kutusu gösteriyordu.
+            VenueCoverImage(
+              photoUrl: _venueDetail!.photoUrl,
+              category: _venueDetail!.category,
+              venueName: _venueDetail!.name,
+              height: 240,
+              borderRadius: BorderRadius.zero,
             ),
             // Gradient overlay
             Container(
